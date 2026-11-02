@@ -6,6 +6,8 @@ import { useEffect, useState, type ReactNode } from 'react';
  */
 function currentPath(): string {
   const h = typeof location !== 'undefined' ? location.hash.replace(/^#/, '') : '';
+  // Retornos do Supabase Auth (#access_token=…, #error=…) não são rotas: vão para a tela de conta.
+  if (/^(access_token|error|type)=/.test(h)) return '/configuracoes';
   return h.split('?')[0] || '/';
 }
 

@@ -84,10 +84,15 @@ function SignIn({ onReady }: { onReady: () => void }) {
     if (r === 'confirm_email') setInfo('Conta criada. Confirme pelo link enviado ao seu e-mail e depois entre.');
     else await afterLogin();
   });
+  // Voltou do link de confirmação do e-mail
+  const confirmed = typeof location !== 'undefined' && /access_token=|type=signup/.test(location.hash);
+  const linkError = typeof location !== 'undefined' && /error=/.test(location.hash) ? decodeURIComponent(location.hash.match(/error_description=([^&]+)/)?.[1] ?? 'Link inválido ou expirado.').replace(/\+/g, ' ') : '';
   const hasLocalJourney = local.mode === 'real' && (local.goals.length > 0 || local.habits.length > 0 || local.xpEvents.length > 0);
 
   return (
     <>
+      {confirmed && <p className="note small" role="status">E-mail confirmado. Agora entre com seu e-mail e senha.</p>}
+      {linkError && <p className="form-error" role="alert">{linkError}</p>}
       <p className="small muted">Entre para guardar sua jornada na nuvem e usar em vários aparelhos. As recompensas passam a ser validadas pelo servidor.</p>
       <div className="form">
         <Field label="E-mail"><input className="input" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
