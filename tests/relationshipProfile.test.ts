@@ -150,3 +150,47 @@ describe('perfil da pessoa: sincronização', () => {
     assert.equal(again.state.relationship.entries.length, 2, 'reenvio da fila não duplica itens');
   });
 });
+
+describe('perfil da pessoa: jornada gravada antes da atualização', () => {
+  it('conta antiga (sem as coleções novas) salva campo da ficha sem erro e devolve estado completo', async () => {
+    const { handleSync, handlePull, handleStatus } = await import('../src/server/handler');
+    const { MemoryDb } = await import('../src/server/memoryDb');
+    const db = new MemoryDb();
+    const USER = '44444444-0000-4000-8000-000000000001';
+    await handlePull(db, USER);
+    const at = new Date().toISOString();
+    const env = (n: number, command: Command) => ({ id: `legado-cmd-${n}-0000`, issuedAt: at, command });
+    const first = await handleSync(db, USER, { commands: [env(1, { type: 'rel/upsert', entity: 'profiles', value: { name: 'Ana', nickname: '', photoId: null, since: null, notes: '' } })] });
+    const pid = first.state.relationship.profiles[0].id;
+    // Simula o documento salvo pela versão anterior do app: sem 'sections' e 'entries'.
+    const stored = db.states.get(USER)!;
+    const rel = stored.state.relationship as Partial<typeof stored.state.relationship>;
+    delete rel.sections;
+    delete rel.entries;
+    const res = await handleSync(db, USER, { commands: [env(2, field(pid, 'Nome completo', 'Ana Souza', 'Dados pessoais'))] });
+    assert.equal(res.results[0].status, 'applied', 'antes da correção o servidor recusava com TypeError');
+    assert.ok(Array.isArray(res.state.relationship.sections), 'o estado devolvido ao aparelho tem todas as coleções');
+    assert.equal(res.state.relationship.entries[0].value, 'Ana Souza');
+    assert.equal((await handleStatus(db, USER)).exists, true);
+  });
+
+  it('o aparelho normaliza o estado recebido mesmo se o servidor mandar sem as coleções novas', async () => {
+    const { SyncEngine } = await import('../src/services/cloud/syncEngine');
+    const { createEmptyState } = await import('../src/domain/initialState');
+    const legacy = createEmptyState(new Date(), { mode: 'real' });
+    const rel = legacy.relationship as Partial<typeof legacy.relationship>;
+    delete rel.sections;
+    delete rel.entries;
+    const transport = {
+      status: async () => ({ exists: true, version: 1 }),
+      pull: async () => ({ state: structuredClone(legacy), version: 2 }),
+      importState: async () => ({ state: legacy, version: 1 }),
+      sync: async () => ({ state: structuredClone(legacy), version: 2, results: [] }),
+      deleteAccount: async () => undefined,
+    };
+    const engine = new SyncEngine(transport as never, { confirmed: createEmptyState(new Date()), version: 1, outbox: [], lastSyncAt: null }, () => undefined);
+    await engine.refresh();
+    assert.deepEqual(engine.confirmed().relationship.sections, []);
+    assert.deepEqual(engine.view().relationship.entries, []);
+  });
+});

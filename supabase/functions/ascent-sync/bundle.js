@@ -1441,8 +1441,12 @@ var HttpError = class extends Error {
   status;
 };
 var MAX_RETRIES = 4;
+async function load(db, userId, now) {
+  const s = await db.loadState(userId);
+  return s ? { ...s, state: migrateState(s.state, now) } : null;
+}
 async function ensureState(db, userId, now) {
-  const cur = await db.loadState(userId);
+  const cur = await load(db, userId, now);
   if (cur) return cur;
   const fresh = createEmptyState(now, { mode: "real" });
   try {
@@ -1450,7 +1454,7 @@ async function ensureState(db, userId, now) {
   } catch (e) {
     if (!(e instanceof ConflictError && e.kind === "exists")) throw e;
   }
-  const created = await db.loadState(userId);
+  const created = await load(db, userId, now);
   if (!created) throw new HttpError(500, "Falha ao criar o estado inicial.");
   return created;
 }
@@ -1495,13 +1499,13 @@ async function handleSync(db, userId, body, now = /* @__PURE__ */ new Date()) {
         done = true;
       } catch (e) {
         if (e instanceof ConflictError && e.kind === "version") {
-          current = await db.loadState(userId) ?? current;
+          current = await load(db, userId, now) ?? current;
           continue;
         }
         if (e instanceof ConflictError && e.kind === "duplicate") {
           const s = await db.findCommand(userId, env.id);
           results.push({ id: env.id, status: "duplicate", effects: s?.effects ?? [], version: s?.version ?? null, originalStatus: s?.status ?? "applied", error: s?.error ?? null });
-          current = await db.loadState(userId) ?? current;
+          current = await load(db, userId, now) ?? current;
           done = true;
           break;
         }

@@ -7,6 +7,7 @@
  * Efeitos (XP, conquistas, animações) só são emitidos quando o servidor confirma — uma única vez por comando.
  */
 import { DomainError, type Command, type Effect } from '../../domain/engine';
+import { migrateState } from '../../domain/initialState';
 import { executeEnvelope, SYNC_RULES, type CommandEnvelope } from '../../domain/sync';
 import type { AppState } from '../../domain/types';
 import type { StoredState, SyncResponse } from '../../server/handler';
@@ -112,7 +113,7 @@ export class SyncEngine {
       }
       const acked = new Set(res.results.map((r) => r.id));
       this.save({
-        confirmed: res.state, version: res.version, lastSyncAt: new Date().toISOString(),
+        confirmed: migrateState(res.state, new Date()), version: res.version, lastSyncAt: new Date().toISOString(),
         outbox: this.snap.outbox.filter((e) => !acked.has(e.id)),
       });
       outcome.sent += batch.length;
@@ -125,7 +126,7 @@ export class SyncEngine {
   async refresh(): Promise<boolean> {
     const s = await this.transport.pull();
     if (s.version === this.snap.version) return false;
-    this.save({ confirmed: s.state, version: s.version, lastSyncAt: new Date().toISOString() });
+    this.save({ confirmed: migrateState(s.state, new Date()), version: s.version, lastSyncAt: new Date().toISOString() });
     return true;
   }
 }

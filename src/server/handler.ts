@@ -65,9 +65,18 @@ export class HttpError extends Error {
 
 const MAX_RETRIES = 4;
 
+/**
+ * Lê o estado do banco já normalizado para o esquema atual. Jornadas gravadas por versões anteriores do
+ * app não têm as coleções novas (ex.: ficha do relacionamento); sem isto o motor quebraria nelas.
+ */
+async function load(db: ServerDb, userId: string, now: Date): Promise<StoredState | null> {
+  const s = await db.loadState(userId);
+  return s ? { ...s, state: migrateState(s.state, now) } : null;
+}
+
 /** Garante que o usuário tem um estado (cria jornada vazia na nuvem no primeiro uso). */
 async function ensureState(db: ServerDb, userId: string, now: Date): Promise<StoredState> {
-  const cur = await db.loadState(userId);
+  const cur = await load(db, userId, now);
   if (cur) return cur;
   const fresh = createEmptyState(now, { mode: 'real' });
   try {
@@ -75,7 +84,7 @@ async function ensureState(db: ServerDb, userId: string, now: Date): Promise<Sto
   } catch (e) {
     if (!(e instanceof ConflictError && e.kind === 'exists')) throw e;
   }
-  const created = await db.loadState(userId);
+  const created = await load(db, userId, now);
   if (!created) throw new HttpError(500, 'Falha ao criar o estado inicial.');
   return created;
 }
@@ -121,13 +130,13 @@ export async function handleSync(db: ServerDb, userId: string, body: unknown, no
         done = true;
       } catch (e) {
         if (e instanceof ConflictError && e.kind === 'version') {
-          current = (await db.loadState(userId)) ?? current; // outro aparelho gravou antes: reaplica no estado novo
+          current = (await load(db, userId, now)) ?? current; // outro aparelho gravou antes: reaplica no estado novo
           continue;
         }
         if (e instanceof ConflictError && e.kind === 'duplicate') {
           const s = await db.findCommand(userId, env.id);
           results.push({ id: env.id, status: 'duplicate', effects: s?.effects ?? [], version: s?.version ?? null, originalStatus: s?.status ?? 'applied', error: s?.error ?? null });
-          current = (await db.loadState(userId)) ?? current;
+          current = (await load(db, userId, now)) ?? current;
           done = true;
           break;
         }

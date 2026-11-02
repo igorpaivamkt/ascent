@@ -62,6 +62,16 @@ declare module 'react' {
     [attr: string]: unknown;
   }
   export type FC<P = object> = (props: P) => ReactNode;
+  export interface ErrorInfo {
+    componentStack?: string | null;
+  }
+  export class Component<P = object, S = object> {
+    constructor(props: P);
+    readonly props: Readonly<P>;
+    state: Readonly<S>;
+    setState(state: Partial<S> | ((prev: Readonly<S>) => Partial<S>)): void;
+    render(): ReactNode;
+  }
   export type PropsWithChildren<P = object> = P & { children?: ReactNode };
 
   /** Atributos de elementos nativos: tipagem leve, com eventos tipados para os campos de formulário. */
@@ -80,7 +90,13 @@ declare module 'react' {
 
   export namespace JSX {
     type Element = ReactElement;
-    type ElementType = string | ((props: never) => ReactNode);
+    type ElementType = string | ((props: never) => ReactNode) | (new (props: never) => Component<any, any>);
+    interface ElementClass {
+      render(): ReactNode;
+    }
+    interface ElementAttributesProperty {
+      props: object;
+    }
     interface IntrinsicElements {
       input: DOMAttributes<HTMLInputElement>;
       select: DOMAttributes<HTMLSelectElement>;

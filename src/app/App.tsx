@@ -15,6 +15,7 @@ import { SettingsPage } from '../features/settings/SettingsPage';
 import { ShopPage } from '../features/shop/ShopPage';
 import { useDocumentPreferences } from '../hooks/usePreferences';
 import { LoginPage } from '../features/auth/LoginPage';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { getCloudConfig } from '../services/cloud/config';
 import { useSyncStatus } from './store';
 import { DesktopHeader, Layout } from './Layout';
@@ -57,7 +58,7 @@ export function App() {
   return (
     <Layout>
       <DesktopHeader />
-      {match ? match.r.render(match.params ?? {}) : <NotFound />}
+      <ErrorBoundary resetKey={path}>{match ? match.r.render(match.params ?? {}) : <NotFound />}</ErrorBoundary>
       <Toaster />
       <Celebrations />
     </Layout>
