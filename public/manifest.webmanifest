@@ -1,0 +1,24 @@
+{
+  "name": "ASCENT — Planeje. Execute. Evolua.",
+  "short_name": "ASCENT",
+  "description": "Personal Life Operating System gamificado: objetivos, rotina, finanças e relacionamento numa jornada até o cume.",
+  "lang": "pt-BR",
+  "id": "./",
+  "start_url": "./#/",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f4f2",
+  "theme_color": "#111111",
+  "categories": ["productivity", "lifestyle", "finance"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Rotina de hoje", "url": "./#/rotina" },
+    { "name": "Montanha", "url": "./#/montanha" }
+  ]
+}

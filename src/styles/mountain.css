@@ -1,0 +1,86 @@
+/* ───────────── Montanha */
+.mountain { position: relative; width: 100%; aspect-ratio: 1 / 1.02; overflow: hidden; border-radius: var(--r-lg); background: var(--sky-top); touch-action: pan-y; }
+.mountain__svg { width: 100%; height: 100%; }
+@media (min-width: 720px) { .mountain { aspect-ratio: 1000 / 620; } }
+.mountain--hero { border-radius: var(--r-lg) var(--r-lg) 0 0; }
+
+.trail { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.trail--shadow { stroke: rgba(0, 0, 0, 0.28); stroke-width: 8; }
+.trail--pending { stroke: var(--trail); stroke-width: 3; stroke-dasharray: 1 10; opacity: 0.95; }
+.trail--done { stroke: var(--trail); stroke-width: 4.2; }
+
+.cp__dot { fill: var(--surface); stroke: var(--ink); stroke-width: 3.2; }
+.cp--lit .cp__dot { fill: var(--ink); stroke: var(--surface); animation: cp-pop 600ms cubic-bezier(0.2, 1.6, 0.4, 1); transform-box: fill-box; transform-origin: center; }
+.cp__check { fill: none; stroke: var(--surface); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.cp__flag line { stroke: var(--ink); stroke-width: 2.4; }
+.cp__flag path { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.cp--lit .cp__flag path { fill: var(--ink); }
+.cp__pulse { fill: none; stroke: var(--ink); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: cp-pulse 1.8s ease-out infinite; }
+.cp__label rect { fill: var(--ink); }
+.cp__label text { fill: var(--on-ink); font: 700 15px var(--font-body); }
+@keyframes cp-pulse { 0% { transform: scale(0.7); opacity: 0.9; } 100% { transform: scale(1.7); opacity: 0; } }
+@keyframes cp-pop { 0% { transform: scale(0.4); } 100% { transform: scale(1); } }
+
+.summit line { stroke: var(--ink); stroke-width: 3; }
+.summit__flag { fill: var(--surface); stroke: var(--ink); stroke-width: 2.4; }
+.summit--reached .summit__flag { fill: var(--ink); transform-box: fill-box; transform-origin: left center; animation: flag-wave 1.4s ease-in-out infinite; }
+@keyframes flag-wave { 0%, 100% { transform: skewY(0deg) scaleX(1); } 50% { transform: skewY(-6deg) scaleX(0.92); } }
+
+.cloud { animation: drift 38s linear infinite alternate; }
+.cloud--slow { animation-duration: 60s; }
+@keyframes drift { from { translate: -18px 0; } to { translate: 18px 0; } }
+
+.floater { font: 800 20px var(--font-display); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 5px; animation: float-up 1.8s ease-out forwards; }
+@keyframes float-up { 0% { transform: translateY(8px); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-46px); opacity: 0; } }
+
+/* ───────────── Personagem */
+.char line, .char path:not(.char__cape), .char ellipse { stroke-linecap: round; stroke-linejoin: round; }
+.char { --sw: 3.4; --c: var(--char); --cf: var(--char-far); --head: var(--char-fill); }
+.char--outline { --sw: 2.7; --head: var(--surface); }
+.char--bold { --sw: 4.6; }
+.char--mist { --c: var(--ink-3); --cf: var(--ink-4); --head: var(--ink-3); }
+.char line { stroke: var(--c); stroke-width: var(--sw); }
+.char__far line { stroke: var(--cf); }
+.char__head { fill: var(--head); stroke: var(--c); stroke-width: calc(var(--sw) * 0.6); }
+.char__pack rect { fill: var(--c); }
+.char__pack line { stroke-width: 2; }
+.char__roll { fill: var(--surface); stroke: var(--c); stroke-width: 2; }
+.char__cape { fill: var(--cf); opacity: 0.9; }
+.char__vest { fill: var(--cf); }
+.char__scarf line { stroke: var(--ink-3); stroke-width: 3; }
+.char__pole { stroke: var(--cf) !important; stroke-width: 2 !important; }
+.char__flag line { stroke: var(--c); stroke-width: 2.2; }
+.char__flag path { fill: var(--c); }
+.char__flag .char__flag-stripe { stroke: var(--surface); stroke-width: 1.6; }
+.item-bandana rect { fill: var(--surface); stroke: var(--c); stroke-width: 1; }
+.item-bandana path { fill: none; stroke: var(--c); stroke-width: 1.8; }
+.item-hat line { stroke: var(--c); stroke-width: 2.6; }
+.item-hat rect { fill: var(--c); }
+.item-hat .item-hat__band { stroke: var(--surface); stroke-width: 1.4; }
+.item-helmet path { fill: var(--ink-3); stroke: var(--c); stroke-width: 1.6; }
+.item-helmet line { stroke: var(--c); stroke-width: 2; }
+.item-crown { fill: var(--c); stroke: var(--surface); stroke-width: 1.2; }
+.fx-sparks line { stroke: var(--c); stroke-width: 2.2; animation: spark 0.9s ease-out infinite; }
+@keyframes spark { 0% { opacity: 0; } 40% { opacity: 1; } 100% { opacity: 0; } }
+.fx-confetti rect { transform-box: fill-box; transform-origin: center; animation: confetti 1.4s ease-in infinite; }
+.fx-confetti .c0 { fill: var(--c); } .fx-confetti .c1 { fill: var(--ink-3); } .fx-confetti .c2 { fill: var(--ink-4); }
+@keyframes confetti { 0% { transform: translateY(-6px) rotate(0deg); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(46px) rotate(320deg); opacity: 0; } }
+.char-preview { overflow: visible; }
+
+/* ───────────── HUD da jornada */
+.journey { border: var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; }
+.journey__hud { padding: 16px 18px 18px; display: grid; gap: 14px; border-top: var(--border); }
+.journey__title { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.journey__title h2 { font-size: var(--t-lg); flex: 1 1 200px; }
+.journey__metrics { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.journey__metric { display: grid; gap: 6px; min-width: 0; }
+.journey__metric dt { font-size: var(--t-xs); font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.04em; }
+.journey__metric dd { margin: 0; font-weight: 800; font-variant-numeric: tabular-nums; font-size: var(--t-md); overflow-wrap: anywhere; }
+@media (max-width: 420px) { .journey__metrics { grid-template-columns: 1fr 1fr; } .journey__metrics .journey__metric:last-child { grid-column: 1 / -1; } }
+.journey__next { display: flex; gap: 10px; align-items: center; font-size: var(--t-sm); color: var(--ink-2); flex-wrap: wrap; }
+.journey__next svg { width: 18px; height: 18px; flex: none; }
+.hero-overlay { position: absolute; left: 22px; top: 20px; max-width: 46%; pointer-events: none; display: none; }
+.hero-overlay h1 { font-size: clamp(1.6rem, 3vw, 2.4rem); }
+.hero-overlay p { font-size: var(--t-lg); color: var(--ink-2); margin-top: 6px; }
+@media (min-width: 720px) { .hero-overlay { display: block; } }
+.journey__picker { display: flex; gap: 6px; flex-wrap: wrap; }

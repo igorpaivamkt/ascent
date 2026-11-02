@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.test-dist/
+ui-check-output/
+android/app/build/
+android/.gradle/
+*.log
+.DS_Store

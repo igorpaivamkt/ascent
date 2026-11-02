@@ -1,0 +1,32 @@
+{
+  "name": "ascent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ASCENT — Personal Life Operating System gamificado (protótipo funcional, mobile-first, PWA, pronto para Capacitor).",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/build.mjs dev",
+    "build": "node scripts/build.mjs build",
+    "preview": "node scripts/build.mjs preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "node scripts/test.mjs",
+    "check:ui": "node scripts/ui-check.cjs",
+    "check:flow": "node scripts/flow-check.cjs",
+    "icons": "node scripts/icons.mjs",
+    "cap:sync": "npm run build && npx cap sync android",
+    "build:server": "node scripts/build-server.mjs",
+    "test:db": "node scripts/test.mjs --db",
+    "mock:cloud": "node scripts/mock-cloud.mjs",
+    "check:cloud": "node scripts/cloud-check.cjs"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-icons": "5.7.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "6.0.3",
+    "@types/node": "26.6.3"
+  }
+}

@@ -1,0 +1,6 @@
+# Configuração do Supabase CLI / integração com o GitHub.
+project_id = "ascent"
+
+[functions.ascent-sync]
+# A função valida o token do usuário por conta própria e precisa responder ao preflight CORS.
+verify_jwt = false

@@ -1,0 +1,195 @@
+import { CATALOG, getItem, REQUIRED_SLOTS } from '../catalog';
+import { COIN_RULES, XP_RULES } from '../config';
+import { addDays } from '../dates';
+import { routineStats } from '../routine';
+import type { AppState, Transaction } from '../types';
+import type { Command, RelEntity } from './commands';
+import type { Kernel } from './kernel';
+
+type C<T extends Command['type']> = Extract<Command, { type: T }>;
+const money = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// ───────────────────────── Perfil e configurações
+export function profileUpdate(k: Kernel, c: C<'profile/update'>): void {
+  if (c.displayName !== undefined) {
+    if (!c.displayName.trim()) k.fail('Informe um nome.');
+    k.d.profile.displayName = c.displayName.trim().slice(0, 40);
+  }
+  if (c.activeTitleId !== undefined) k.d.profile.activeTitleId = c.activeTitleId;
+}
+
+export function settingsUpdate(k: Kernel, { patch }: C<'settings/update'>): void {
+  if (patch.coinName !== undefined && !patch.coinName.trim()) k.fail('A moeda precisa de um nome.');
+  Object.assign(k.d.settings, patch, patch.coinName ? { coinName: patch.coinName.trim().slice(0, 24) } : {});
+}
+
+// ───────────────────────── Finanças
+export function txUpsert(k: Kernel, { tx }: C<'tx/upsert'>): void {
+  if (!tx.description.trim()) k.fail('Descreva a transação.');
+  if (!Number.isFinite(tx.amount) || tx.amount <= 0) k.fail('O valor precisa ser maior que zero.');
+  const cat = k.d.finance.categories.find((c) => c.id === tx.categoryId);
+  if (!cat || cat.kind !== tx.type) k.fail('Escolha uma categoria compatível com o tipo.');
+  if (!k.d.finance.accounts.some((a) => a.id === tx.accountId)) k.fail('Escolha uma conta.');
+  if (tx.type === 'income' && !tx.incomeClass) k.fail('Classifique a natureza da receita.');
+  const value = { ...tx, description: tx.description.trim(), amount: Math.round(tx.amount * 100) / 100, incomeClass: tx.type === 'income' ? tx.incomeClass : null };
+  const existing = tx.id ? k.d.finance.transactions.find((t) => t.id === tx.id) : undefined;
+  if (existing) {
+    Object.assign(existing, value, { updatedAt: k.at });
+    k.log('financas', 'tx', `Transação editada: ${value.description}`, money(value.amount));
+  } else {
+    const t: Transaction = { ...value, id: k.id(), createdAt: k.at, updatedAt: k.at };
+    k.d.finance.transactions.push(t);
+    k.log('financas', 'tx', `${t.type === 'income' ? 'Receita' : 'Despesa'} registrada: ${t.description}`, `${money(t.amount)} · ${{ planned: 'prevista', pending: 'pendente', settled: 'realizada' }[t.status]}`);
+  }
+}
+
+export function txRemove(k: Kernel, { txId }: C<'tx/remove'>): void {
+  const t = k.d.finance.transactions.find((x) => x.id === txId) ?? k.fail('Transação não encontrada.');
+  k.d.finance.transactions = k.d.finance.transactions.filter((x) => x.id !== txId);
+  k.log('financas', 'tx', `Transação removida: ${t.description}`, money(t.amount));
+}
+
+export function txSettle(k: Kernel, { txId }: C<'tx/settle'>): void {
+  const t = k.d.finance.transactions.find((x) => x.id === txId) ?? k.fail('Transação não encontrada.');
+  if (t.status === 'settled') return;
+  t.status = 'settled';
+  t.updatedAt = k.at;
+  k.log('financas', 'tx', `Transação realizada: ${t.description}`, money(t.amount));
+}
+
+export function accountUpsert(k: Kernel, { account }: C<'account/upsert'>): void {
+  if (!account.name.trim()) k.fail('Dê um nome à conta.');
+  if (!Number.isFinite(account.openingBalance)) k.fail('Saldo inicial inválido.');
+  const existing = account.id ? k.d.finance.accounts.find((a) => a.id === account.id) : undefined;
+  if (existing) Object.assign(existing, account, { name: account.name.trim() });
+  else k.d.finance.accounts.push({ ...account, name: account.name.trim(), id: k.id() });
+}
+
+export function categoryAdd(k: Kernel, { name, kind }: C<'category/add'>): void {
+  if (!name.trim()) k.fail('Dê um nome à categoria.');
+  if (k.d.finance.categories.some((c) => c.kind === kind && c.name.toLowerCase() === name.trim().toLowerCase())) k.fail('Essa categoria já existe.');
+  k.d.finance.categories.push({ id: k.id(), name: name.trim(), kind });
+}
+
+export function budgetSet(k: Kernel, { categoryId, month, amount }: C<'budget/set'>): void {
+  if (!Number.isFinite(amount) || amount < 0) k.fail('Valor de orçamento inválido.');
+  const b = k.d.finance.budgets.find((x) => x.categoryId === categoryId && x.month === month);
+  if (amount === 0) k.d.finance.budgets = k.d.finance.budgets.filter((x) => x !== b);
+  else if (b) b.amount = amount;
+  else k.d.finance.budgets.push({ id: k.id(), categoryId, month, amount });
+}
+
+// ───────────────────────── Relacionamento
+const REL_LABEL: Record<RelEntity, string> = {
+  profiles: 'Perfil', preferences: 'Preferência', dates: 'Data importante', wishes: 'Desejo', experiences: 'Experiência', expenses: 'Gasto', commitments: 'Compromisso',
+};
+
+export function relUpsert(k: Kernel, c: C<'rel/upsert'>): void {
+  const list = k.d.relationship[c.entity] as unknown as { id: string }[];
+  const v = c.value as Record<string, unknown> & { id?: string };
+  const text = (v.title ?? v.value ?? v.name ?? v.description) as string | undefined;
+  if (typeof text === 'string' && !text.trim()) k.fail('Preencha o campo principal.');
+  if (c.entity === 'expenses' && !(Number(v.amount) > 0)) k.fail('O valor precisa ser maior que zero.');
+  if (c.entity !== 'profiles' && !k.d.relationship.profiles.some((p) => p.id === v.profileId)) k.fail('Perfil não encontrado.');
+  const existing = v.id ? list.find((x) => x.id === v.id) : undefined;
+  if (existing) {
+    Object.assign(existing, v);
+    return;
+  }
+  const created: Record<string, unknown> = { ...v, id: k.id() };
+  if (c.entity === 'preferences') created.recordedAt = k.at;
+  else if (c.entity === 'commitments') created.completedAt = null;
+  else if (c.entity !== 'dates' && c.entity !== 'expenses') created.createdAt = k.at;
+  list.push(created as { id: string });
+  k.log('relacionamento', c.entity, `${REL_LABEL[c.entity]} registrado(a): ${String(text ?? '')}`, '');
+  if (c.entity === 'experiences') {
+    // Limite anti-inflação: no máximo uma recompensa por experiência por dia.
+    const date = String(v.date ?? k.today);
+    k.grantXp(`relexp:${date}`, XP_RULES.relExperience, 'execution', `Experiência registrada: ${String(text)}`, 'rel_experience', String(created.id));
+  }
+}
+
+export function relRemove(k: Kernel, { entity, id }: C<'rel/remove'>): void {
+  const rel = k.d.relationship;
+  if (entity === 'profiles') {
+    const p = rel.profiles.find((x) => x.id === id) ?? k.fail('Perfil não encontrado.');
+    for (const key of ['preferences', 'dates', 'wishes', 'experiences', 'expenses', 'commitments'] as const) {
+      (rel[key] as { profileId: string }[]) = (rel[key] as { profileId: string }[]).filter((x) => x.profileId !== id);
+    }
+    rel.privateDetails = rel.privateDetails.filter((x) => x.profileId !== id);
+    rel.profiles = rel.profiles.filter((x) => x.id !== id);
+    k.log('relacionamento', 'profile', `Perfil removido: ${p.name}`, 'Todos os registros associados foram excluídos.');
+    return;
+  }
+  if (entity === 'commitments') k.setSourceXp('rel_commitment', id, 0, 'compromisso removido');
+  if (entity === 'experiences') for (const e of rel.expenses) if (e.experienceId === id) e.experienceId = null;
+  (rel[entity] as { id: string }[]) = (rel[entity] as { id: string }[]).filter((x) => x.id !== id);
+}
+
+export function relToggle(k: Kernel, { entity, id }: C<'rel/toggle'>): void {
+  if (entity === 'wishes') {
+    const w = k.d.relationship.wishes.find((x) => x.id === id) ?? k.fail('Item não encontrado.');
+    w.status = w.status === 'pendente' ? 'realizado' : 'pendente';
+    if (w.status === 'realizado') k.log('relacionamento', 'wish', `Desejo realizado: ${w.title}`, '');
+    return;
+  }
+  const c = k.d.relationship.commitments.find((x) => x.id === id) ?? k.fail('Compromisso não encontrado.');
+  const done = c.status !== 'done';
+  c.status = done ? 'done' : 'pending';
+  c.completedAt = done ? k.at : null;
+  k.setSourceXp('rel_commitment', c.id, done ? XP_RULES.relCommitmentDone : 0, done ? `Compromisso cumprido: ${c.title}` : `compromisso reaberto (${c.title})`);
+  k.log('relacionamento', 'commitment', done ? `Compromisso cumprido: ${c.title}` : `Compromisso reaberto: ${c.title}`, '');
+}
+
+export function relPrivateSet(k: Kernel, c: C<'rel/private/set'>): void {
+  if (!k.d.relationship.profiles.some((p) => p.id === c.profileId)) k.fail('Perfil não encontrado.');
+  const rec = k.d.relationship.privateDetails.find((p) => p.profileId === c.profileId);
+  const value = { profileId: c.profileId, address: c.address.trim(), postalCode: c.postalCode.replace(/[^\d-]/g, '').slice(0, 9), updatedAt: k.at };
+  if (rec) Object.assign(rec, value);
+  else k.d.relationship.privateDetails.push(value);
+}
+
+export function relPrivateClear(k: Kernel, { profileId }: C<'rel/private/clear'>): void {
+  k.d.relationship.privateDetails = k.d.relationship.privateDetails.filter((p) => p.profileId !== profileId);
+}
+
+// ───────────────────────── Revisão semanal
+export function reviewSave(k: Kernel, c: C<'review/save'>): void {
+  if (c.weekStart > k.today) k.fail('Essa semana ainda não começou.');
+  const st = routineStats(k.d, c.weekStart, addDays(c.weekStart, 6), k.today);
+  const existing = k.d.reviews.find((r) => r.weekStart === c.weekStart);
+  const data = {
+    weekStart: c.weekStart, planned: st.eligible, done: st.done, partial: st.partial, rate: st.rate,
+    highlights: c.highlights.trim(), obstacles: c.obstacles.trim(), priorities: c.priorities.trim(),
+  };
+  if (existing) Object.assign(existing, data);
+  else k.d.reviews.push({ ...data, id: k.id(), createdAt: k.at });
+  k.grantXp(`review:${c.weekStart}`, XP_RULES.weeklyReview, 'review', 'Revisão semanal', 'review', c.weekStart);
+  k.grantCoins(`review:${c.weekStart}`, COIN_RULES.weeklyReview, 'Revisão semanal');
+  k.log('revisao', 'review', existing ? 'Revisão semanal atualizada' : 'Revisão semanal concluída', `Semana de ${c.weekStart}`);
+}
+
+// ───────────────────────── Loja e inventário
+export function shopBuy(k: Kernel, { itemId }: C<'shop/buy'>): void {
+  const item = getItem(itemId) ?? k.fail('Item não encontrado.');
+  if (k.d.inventory.some((i) => i.itemId === itemId)) k.fail('Você já possui este item.');
+  if (item.unlock.type !== 'coins') k.fail('Este item é desbloqueado por nível ou conquista, não por compra.');
+  k.spendCoins(`buy:${itemId}`, item.unlock.price, `Compra: ${item.name}`);
+  k.d.inventory.push({ itemId, acquiredAt: k.at, method: 'coins' });
+  k.log('loja', 'purchase', `Item comprado: ${item.name}`, `${item.unlock.price} ${k.d.settings.coinName}`);
+}
+
+export function shopEquip(k: Kernel, { itemId }: C<'shop/equip'>): void {
+  const item = getItem(itemId) ?? k.fail('Item não encontrado.');
+  if (!k.d.inventory.some((i) => i.itemId === itemId)) k.fail('Adquira o item antes de equipá-lo.');
+  k.d.equipped[item.slot] = itemId;
+}
+
+export function shopUnequip(k: Kernel, { slot }: C<'shop/unequip'>): void {
+  if (REQUIRED_SLOTS.includes(slot)) k.fail('O personagem precisa de um visual base.');
+  k.d.equipped[slot] = null;
+}
+
+export function ownsAll(state: AppState): boolean {
+  return CATALOG.every((i) => state.inventory.some((x) => x.itemId === i.id));
+}

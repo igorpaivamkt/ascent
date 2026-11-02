@@ -1,0 +1,8 @@
+{
+  "appId": "br.com.ascent.app",
+  "appName": "ASCENT",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#f4f4f2"
+  }
+}
