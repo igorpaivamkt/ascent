@@ -47,7 +47,7 @@ export function createEmptyState(now: Date, opts: { mode?: AppState['mode']; dis
       transactions: [],
       budgets: [],
     },
-    relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], privateDetails: [] },
+    relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], sections: [], entries: [], privateDetails: [] },
     reviews: [],
     activity: [],
   };

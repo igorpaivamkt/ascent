@@ -744,6 +744,16 @@ var Kernel = class {
   }
 };
 
+// src/domain/relationshipProfile.ts
+var BUILTIN_SECTIONS = [
+  { id: "perfil", title: "Perfil", kind: "fields", builtIn: true, hint: "Dados, medidas e tamanhos. \xDAtil na hora de comprar roupa, cal\xE7ado ou presente." },
+  { id: "personalidade", title: "Personalidade", kind: "list", builtIn: true, hint: "Tra\xE7os do jeito de ser. Ex.: introvertida, organizada, gosta de planejar." },
+  { id: "qualidades", title: "Qualidades", kind: "list", builtIn: true, hint: "O que voc\xEA admira nela/nele." },
+  { id: "defeitos", title: "Defeitos", kind: "list", builtIn: true, hint: "Pontos de aten\xE7\xE3o, para entender e lidar melhor. Fica s\xF3 com voc\xEA." }
+];
+var BUILTIN_IDS = new Set(BUILTIN_SECTIONS.map((s) => s.id));
+var LIMITS = { sectionTitle: 40, label: 60, value: 500, note: 500, group: 40, customSections: 20, entriesPerProfile: 1e3 };
+
 // src/domain/engine/otherHandlers.ts
 var money = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 function profileUpdate(k, c) {
@@ -813,11 +823,52 @@ var REL_LABEL = {
   wishes: "Desejo",
   experiences: "Experi\xEAncia",
   expenses: "Gasto",
-  commitments: "Compromisso"
+  commitments: "Compromisso",
+  sections: "Aba do perfil",
+  entries: "Item do perfil"
 };
+var clip = (k, v, max, what) => {
+  const s = typeof v === "string" ? v.trim() : "";
+  if (s.length > max) k.fail(`${what}: use no m\xE1ximo ${max} caracteres.`);
+  return s;
+};
+function normalizeProfileData(k, entity, v) {
+  const rel = k.d.relationship;
+  if (entity === "sections") {
+    v.title = clip(k, v.title, LIMITS.sectionTitle, "Nome da aba");
+    if (!v.title) k.fail("D\xEA um nome para a aba.");
+    if (v.kind !== "fields" && v.kind !== "list") k.fail("Tipo de aba inv\xE1lido.");
+    const existing2 = v.id ? rel.sections.find((s) => s.id === v.id) : void 0;
+    if (existing2) {
+      if (existing2.kind !== v.kind) k.fail("O tipo da aba n\xE3o pode ser trocado depois de criada.");
+      v.profileId = existing2.profileId;
+    } else if (rel.sections.filter((s) => s.profileId === v.profileId).length >= LIMITS.customSections) k.fail(`Limite de ${LIMITS.customSections} abas personalizadas.`);
+    return;
+  }
+  const existing = v.id ? rel.entries.find((e) => e.id === v.id) : void 0;
+  if (existing) {
+    v.profileId = existing.profileId;
+    v.sectionId = existing.sectionId;
+  }
+  const sectionId = String(v.sectionId ?? "");
+  const custom = rel.sections.find((s) => s.id === sectionId);
+  if (!BUILTIN_IDS.has(sectionId) && !(custom && custom.profileId === v.profileId)) k.fail("Aba n\xE3o encontrada.");
+  const kind = custom ? custom.kind : sectionId === "perfil" ? "fields" : "list";
+  v.label = kind === "fields" ? clip(k, v.label, LIMITS.label, "Nome do campo") : "";
+  if (kind === "fields" && !v.label) k.fail("D\xEA um nome para o campo (ex.: Cal\xE7ado).");
+  v.value = clip(k, v.value, LIMITS.value, "Valor");
+  if (!v.value) k.fail(kind === "fields" ? "Preencha o valor do campo." : "Escreva o item.");
+  v.note = clip(k, v.note ?? "", LIMITS.note, "Observa\xE7\xE3o");
+  v.group = kind === "fields" ? clip(k, v.group ?? "", LIMITS.group, "Grupo") : "";
+  v.format = v.format === "data" ? "data" : "texto";
+  if (v.format === "data" && !/^\d{4}-\d{2}-\d{2}$/.test(String(v.value))) k.fail("Data inv\xE1lida.");
+  if (!existing && rel.entries.filter((e) => e.profileId === v.profileId).length >= LIMITS.entriesPerProfile) k.fail("Limite de itens do perfil atingido.");
+  v.updatedAt = k.at;
+}
 function relUpsert(k, c) {
   const list = k.d.relationship[c.entity];
-  const v = c.value;
+  const v = { ...c.value };
+  if (c.entity === "sections" || c.entity === "entries") normalizeProfileData(k, c.entity, v);
   const text = v.title ?? v.value ?? v.name ?? v.description;
   if (typeof text === "string" && !text.trim()) k.fail("Preencha o campo principal.");
   if (c.entity === "expenses" && !(Number(v.amount) > 0)) k.fail("O valor precisa ser maior que zero.");
@@ -825,6 +876,10 @@ function relUpsert(k, c) {
   const existing = v.id ? list.find((x) => x.id === v.id) : void 0;
   if (existing) {
     Object.assign(existing, v);
+    return;
+  }
+  if (c.entity === "entries") {
+    list.push({ ...v, id: k.id(), createdAt: k.at });
     return;
   }
   const created = { ...v, id: k.id() };
@@ -842,13 +897,17 @@ function relRemove(k, { entity, id }) {
   const rel = k.d.relationship;
   if (entity === "profiles") {
     const p = rel.profiles.find((x) => x.id === id) ?? k.fail("Perfil n\xE3o encontrado.");
-    for (const key of ["preferences", "dates", "wishes", "experiences", "expenses", "commitments"]) {
+    for (const key of ["preferences", "dates", "wishes", "experiences", "expenses", "commitments", "sections", "entries"]) {
       rel[key] = rel[key].filter((x) => x.profileId !== id);
     }
     rel.privateDetails = rel.privateDetails.filter((x) => x.profileId !== id);
     rel.profiles = rel.profiles.filter((x) => x.id !== id);
     k.log("relacionamento", "profile", `Perfil removido: ${p.name}`, "Todos os registros associados foram exclu\xEDdos.");
     return;
+  }
+  if (entity === "sections") {
+    const sec = rel.sections.find((x) => x.id === id) ?? k.fail("Aba n\xE3o encontrada.");
+    rel.entries = rel.entries.filter((e) => e.sectionId !== sec.id);
   }
   if (entity === "commitments") k.setSourceXp("rel_commitment", id, 0, "compromisso removido");
   if (entity === "experiences") {
@@ -1199,7 +1258,7 @@ function createEmptyState(now, opts = {}) {
       transactions: [],
       budgets: []
     },
-    relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], privateDetails: [] },
+    relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], sections: [], entries: [], privateDetails: [] },
     reviews: [],
     activity: []
   };

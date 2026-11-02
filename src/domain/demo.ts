@@ -162,6 +162,31 @@ export function createDemoState(now: Date): AppState {
     ['Música', 'MPB', 'confirmada'], ['Cor', 'Verde-oliva', 'suposicao'], ['Bebida', 'Chá gelado de pêssego', 'confirmada'],
   ];
   for (const [category, value, certainty] of prefs) run(38, { type: 'rel/upsert', entity: 'preferences', value: { profileId: pid, category, value, certainty, outdated: false } });
+  // Ficha da pessoa (aba Perfil)
+  const field = (group: string, label: string, value: string, format: 'texto' | 'data' = 'texto') =>
+    run(37, { type: 'rel/upsert', entity: 'entries', value: { profileId: pid, sectionId: 'perfil', label, value, note: '', group, format } });
+  field('Dados pessoais', 'Data de nascimento', '2004-11-18', 'data');
+  field('Dados pessoais', 'Altura', '1,63 m');
+  field('Medidas e tamanhos', 'Calçado', '37');
+  field('Medidas e tamanhos', 'Sandália', '36');
+  field('Medidas e tamanhos', 'Roupa', 'M');
+  field('Medidas e tamanhos', 'Calça', '38');
+  field('Gostos', 'Cor favorita', 'Verde-oliva');
+  field('Gostos', 'Perfume', 'Florais suaves');
+  const item = (sectionId: string, value: string, note = '') =>
+    run(37, { type: 'rel/upsert', entity: 'entries', value: { profileId: pid, sectionId, label: '', value, note, group: '', format: 'texto' } });
+  item('personalidade', 'Introvertida', 'Recarrega a energia em casa, com pouca gente.');
+  item('personalidade', 'Planejadora');
+  item('personalidade', 'Curiosa');
+  item('qualidades', 'Paciente');
+  item('qualidades', 'Escuta com atenção');
+  item('qualidades', 'Senso de humor');
+  item('defeitos', 'Ansiosa com atrasos', 'Avisar com antecedência quando for atrasar.');
+  item('defeitos', 'Teimosa quando está cansada');
+  run(36, { type: 'rel/upsert', entity: 'sections', value: { profileId: pid, title: 'Sonhos', kind: 'list' } });
+  const dreams = id((s) => s.relationship.sections[0]?.id);
+  item(dreams, 'Morar perto da praia');
+  item(dreams, 'Conhecer o Japão');
   run(38, { type: 'rel/upsert', entity: 'dates', value: { profileId: pid, title: 'Aniversário dela', date: `${today.slice(0, 4)}-11-18`, yearly: true } });
   run(38, { type: 'rel/upsert', entity: 'dates', value: { profileId: pid, title: 'Início do namoro', date: '2026-03-01', yearly: true } });
   run(30, { type: 'rel/upsert', entity: 'wishes', value: { profileId: pid, title: 'Leitor de livros digitais', kind: 'presente', status: 'pendente', note: 'Comentou que lê muito no celular.' } });

@@ -9,8 +9,9 @@ import { initials, money, money0, parseNumber } from '../../utils/format';
 import { compressImage } from '../../utils/image';
 import { DemoBanner } from '../settings/DemoBanner';
 import { ExperienceForm } from './ExperienceForm';
+import { ProfileTab } from './ProfileTab';
 
-type Tab = 'perfil' | 'experiencias' | 'gastos' | 'compromissos' | 'privado';
+type Tab = 'perfil' | 'preferencias' | 'experiencias' | 'gastos' | 'compromissos' | 'privado';
 
 function useMediaUrl(id: string | null): string | null {
   const store = useStore();
@@ -46,8 +47,9 @@ export function RelationshipPage() {
         <button className="btn btn--sm" onClick={() => setEditProfile(true)}><LuPencil /> Editar perfil</button>
       </header>
       <p className="note small" style={{ marginBottom: 16 }}><LuLock />Espaço privado para ser mais atento e presente. Não há pontuações sobre sentimentos ou compromisso da outra pessoa — e nada daqui aparece em notificações.</p>
-      <Tabs value={tab} onChange={setTab} label="Seções do relacionamento" options={[{ value: 'perfil', label: 'Preferências' }, { value: 'experiencias', label: 'Experiências' }, { value: 'gastos', label: 'Gastos' }, { value: 'compromissos', label: 'Compromissos' }, { value: 'privado', label: 'Dados privados' }]} />
-      {tab === 'perfil' && <Preferences profile={profile} />}
+      <Tabs value={tab} onChange={setTab} label="Seções do relacionamento" options={[{ value: 'perfil', label: 'Perfil' }, { value: 'preferencias', label: 'Preferências' }, { value: 'experiencias', label: 'Experiências' }, { value: 'gastos', label: 'Gastos' }, { value: 'compromissos', label: 'Compromissos' }, { value: 'privado', label: 'Dados privados' }]} />
+      {tab === 'perfil' && <ProfileTab profile={profile} />}
+      {tab === 'preferencias' && <Preferences profile={profile} />}
       {tab === 'experiencias' && <Experiences profile={profile} />}
       {tab === 'gastos' && <Expenses profile={profile} />}
       {tab === 'compromissos' && <Commitments profile={profile} />}

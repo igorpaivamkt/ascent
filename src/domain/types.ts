@@ -321,6 +321,33 @@ export interface RelCommitment {
   status: 'pending' | 'done';
   completedAt: ISODateTime | null;
 }
+/**
+ * Ficha da pessoa: abas (seções) com campos "nome → valor" ou listas de itens. As abas fixas
+ * (perfil, personalidade, qualidades, defeitos) não têm registro; só as personalizadas são guardadas.
+ */
+export type RelSectionKind = 'fields' | 'list';
+export interface RelSection {
+  id: ID;
+  profileId: ID;
+  title: string;
+  kind: RelSectionKind;
+  createdAt: ISODateTime;
+}
+export interface RelEntry {
+  id: ID;
+  profileId: ID;
+  /** Id de uma aba fixa ('perfil', 'personalidade', 'qualidades', 'defeitos') ou de uma aba personalizada. */
+  sectionId: string;
+  /** Nome do campo (ex.: "Calçado"). Vazio em itens de lista. */
+  label: string;
+  value: string;
+  note: string;
+  /** Agrupamento dentro da aba (ex.: "Medidas e tamanhos"). */
+  group: string;
+  format: 'texto' | 'data';
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
 /** Dados sensíveis (endereço/CEP): opcionais, mascarados na interface, nunca exibidos em resumos. */
 export interface RelPrivate {
   profileId: ID;
@@ -384,6 +411,8 @@ export interface AppState {
     experiences: RelExperience[];
     expenses: RelExpense[];
     commitments: RelCommitment[];
+    sections: RelSection[];
+    entries: RelEntry[];
     privateDetails: RelPrivate[];
   };
   reviews: WeeklyReview[];

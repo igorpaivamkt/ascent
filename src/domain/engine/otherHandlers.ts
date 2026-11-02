@@ -1,6 +1,7 @@
 import { CATALOG, getItem, REQUIRED_SLOTS } from '../catalog';
 import { COIN_RULES, XP_RULES } from '../config';
 import { addDays } from '../dates';
+import { BUILTIN_IDS, LIMITS } from '../relationshipProfile';
 import { routineStats } from '../routine';
 import type { AppState, Transaction } from '../types';
 import type { Command, RelEntity } from './commands';
@@ -82,11 +83,56 @@ export function budgetSet(k: Kernel, { categoryId, month, amount }: C<'budget/se
 // ───────────────────────── Relacionamento
 const REL_LABEL: Record<RelEntity, string> = {
   profiles: 'Perfil', preferences: 'Preferência', dates: 'Data importante', wishes: 'Desejo', experiences: 'Experiência', expenses: 'Gasto', commitments: 'Compromisso',
+  sections: 'Aba do perfil', entries: 'Item do perfil',
 };
+
+const clip = (k: Kernel, v: unknown, max: number, what: string): string => {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (s.length > max) k.fail(`${what}: use no máximo ${max} caracteres.`);
+  return s;
+};
+
+/** Valida e normaliza abas e itens da ficha da pessoa (antes do upsert genérico). */
+function normalizeProfileData(k: Kernel, entity: RelEntity, v: Record<string, unknown>): void {
+  const rel = k.d.relationship;
+  if (entity === 'sections') {
+    v.title = clip(k, v.title, LIMITS.sectionTitle, 'Nome da aba');
+    if (!v.title) k.fail('Dê um nome para a aba.');
+    if (v.kind !== 'fields' && v.kind !== 'list') k.fail('Tipo de aba inválido.');
+    const existing = v.id ? rel.sections.find((s) => s.id === v.id) : undefined;
+    if (existing) {
+      if (existing.kind !== v.kind) k.fail('O tipo da aba não pode ser trocado depois de criada.');
+      v.profileId = existing.profileId;
+    } else if (rel.sections.filter((s) => s.profileId === v.profileId).length >= LIMITS.customSections) k.fail(`Limite de ${LIMITS.customSections} abas personalizadas.`);
+    return;
+  }
+  // entries
+  const existing = v.id ? rel.entries.find((e) => e.id === v.id) : undefined;
+  if (existing) {
+    v.profileId = existing.profileId; // um item não muda de pessoa
+    v.sectionId = existing.sectionId;
+  }
+  const sectionId = String(v.sectionId ?? '');
+  const custom = rel.sections.find((s) => s.id === sectionId);
+  if (!BUILTIN_IDS.has(sectionId) && !(custom && custom.profileId === v.profileId)) k.fail('Aba não encontrada.');
+  const kind = custom ? custom.kind : sectionId === 'perfil' ? 'fields' : 'list';
+  v.label = kind === 'fields' ? clip(k, v.label, LIMITS.label, 'Nome do campo') : '';
+  if (kind === 'fields' && !v.label) k.fail('Dê um nome para o campo (ex.: Calçado).');
+  v.value = clip(k, v.value, LIMITS.value, 'Valor');
+  if (!v.value) k.fail(kind === 'fields' ? 'Preencha o valor do campo.' : 'Escreva o item.');
+  v.note = clip(k, v.note ?? '', LIMITS.note, 'Observação');
+  v.group = kind === 'fields' ? clip(k, v.group ?? '', LIMITS.group, 'Grupo') : '';
+  v.format = v.format === 'data' ? 'data' : 'texto';
+  if (v.format === 'data' && !/^\d{4}-\d{2}-\d{2}$/.test(String(v.value))) k.fail('Data inválida.');
+  if (!existing && rel.entries.filter((e) => e.profileId === v.profileId).length >= LIMITS.entriesPerProfile) k.fail('Limite de itens do perfil atingido.');
+  v.updatedAt = k.at;
+}
 
 export function relUpsert(k: Kernel, c: C<'rel/upsert'>): void {
   const list = k.d.relationship[c.entity] as unknown as { id: string }[];
-  const v = c.value as Record<string, unknown> & { id?: string };
+  // Cópia: a validação normaliza campos sem alterar o comando original (que pode estar na fila offline).
+  const v = { ...(c.value as Record<string, unknown>) } as Record<string, unknown> & { id?: string };
+  if (c.entity === 'sections' || c.entity === 'entries') normalizeProfileData(k, c.entity, v);
   const text = (v.title ?? v.value ?? v.name ?? v.description) as string | undefined;
   if (typeof text === 'string' && !text.trim()) k.fail('Preencha o campo principal.');
   if (c.entity === 'expenses' && !(Number(v.amount) > 0)) k.fail('O valor precisa ser maior que zero.');
@@ -95,6 +141,10 @@ export function relUpsert(k: Kernel, c: C<'rel/upsert'>): void {
   if (existing) {
     Object.assign(existing, v);
     return;
+  }
+  if (c.entity === 'entries') {
+    list.push({ ...v, id: k.id(), createdAt: k.at } as { id: string });
+    return; // sem registro no histórico: é anotação, não evento
   }
   const created: Record<string, unknown> = { ...v, id: k.id() };
   if (c.entity === 'preferences') created.recordedAt = k.at;
@@ -113,13 +163,17 @@ export function relRemove(k: Kernel, { entity, id }: C<'rel/remove'>): void {
   const rel = k.d.relationship;
   if (entity === 'profiles') {
     const p = rel.profiles.find((x) => x.id === id) ?? k.fail('Perfil não encontrado.');
-    for (const key of ['preferences', 'dates', 'wishes', 'experiences', 'expenses', 'commitments'] as const) {
+    for (const key of ['preferences', 'dates', 'wishes', 'experiences', 'expenses', 'commitments', 'sections', 'entries'] as const) {
       (rel[key] as { profileId: string }[]) = (rel[key] as { profileId: string }[]).filter((x) => x.profileId !== id);
     }
     rel.privateDetails = rel.privateDetails.filter((x) => x.profileId !== id);
     rel.profiles = rel.profiles.filter((x) => x.id !== id);
     k.log('relacionamento', 'profile', `Perfil removido: ${p.name}`, 'Todos os registros associados foram excluídos.');
     return;
+  }
+  if (entity === 'sections') {
+    const sec = rel.sections.find((x) => x.id === id) ?? k.fail('Aba não encontrada.');
+    rel.entries = rel.entries.filter((e) => e.sectionId !== sec.id);
   }
   if (entity === 'commitments') k.setSourceXp('rel_commitment', id, 0, 'compromisso removido');
   if (entity === 'experiences') for (const e of rel.expenses) if (e.experienceId === id) e.experienceId = null;

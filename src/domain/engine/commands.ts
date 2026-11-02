@@ -57,7 +57,7 @@ export interface TxDraft {
 
 type Rel = AppState['relationship'];
 export type RelEntity = Exclude<keyof Rel, 'privateDetails'>;
-type RelValue<K extends RelEntity> = Omit<Rel[K][number], 'id' | 'createdAt' | 'recordedAt' | 'completedAt'> & { id?: string };
+type RelValue<K extends RelEntity> = Omit<Rel[K][number], 'id' | 'createdAt' | 'recordedAt' | 'completedAt' | 'updatedAt'> & { id?: string };
 
 export type Command =
   | { type: 'profile/update'; displayName?: string; activeTitleId?: string | null }

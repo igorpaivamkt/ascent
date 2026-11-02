@@ -169,3 +169,43 @@
 .input-with-action .input { flex: 1; padding-right: 52px; }
 .input-with-action .btn { position: absolute; right: 2px; top: 50%; transform: translateY(-50%); padding: 0; width: var(--touch); }
 .input-with-action .btn:active { transform: translateY(-50%) scale(0.97); }
+
+/* ───────────── Relacionamento → Perfil (ficha da pessoa) */
+.ficha { display: grid; gap: 14px; }
+.subtabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; margin: -2px 0 0; }
+.subtabs::-webkit-scrollbar { display: none; }
+.subtabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 13px; border-radius: var(--r-pill); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); font-weight: 600; font-size: var(--t-sm); }
+.subtabs button[aria-selected='true'] { background: var(--surface); color: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.subtabs__count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: var(--r-pill); background: var(--surface-3); color: var(--ink-2); font-size: 11px; font-weight: 700; }
+.subtabs button[aria-selected='true'] .subtabs__count { background: var(--ink); color: var(--on-ink); }
+.subtabs .subtabs__add { background: transparent; border-style: dashed; color: var(--ink); }
+.subtabs__add svg { width: 15px; height: 15px; }
+.ficha__card .card__head { margin-bottom: 6px; }
+.ficha__hint { margin-bottom: 12px; }
+.facts + .facts { margin-top: 14px; }
+.facts__group { font-size: var(--t-xs); color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 2px; }
+.facts dl { margin: 0; display: grid; }
+.facts__row { display: grid; grid-template-columns: minmax(96px, 38%) 1fr auto; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.facts__row:last-child { border-bottom: 0; }
+.facts__row dt { color: var(--ink-3); font-size: var(--t-sm); overflow-wrap: anywhere; }
+.facts__row dd { margin: 0; display: grid; gap: 2px; min-width: 0; }
+.facts__value { font-weight: 700; overflow-wrap: anywhere; }
+.facts__note { font-size: var(--t-xs); color: var(--ink-3); overflow-wrap: anywhere; }
+.facts__row .list__end .icon-btn { width: 40px; height: 40px; }
+.ficha__suggest { margin-top: 14px; display: grid; gap: 8px; }
+.chip--btn { cursor: pointer; min-height: 36px; padding: 0 12px; }
+.chip--btn:hover { background: var(--surface-2); }
+.ficha__add { display: flex; gap: 8px; margin-top: 12px; }
+.ficha__add .input { flex: 1; min-width: 0; }
+.ficha__done { margin-top: 14px; }
+.ficha__done summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; }
+.sizes { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.sizes > div { border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 12px; display: grid; gap: 2px; }
+.sizes dt { font-size: var(--t-xs); color: var(--ink-3); }
+.sizes dd { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; }
+@media (max-width: 420px) {
+  .facts__row { grid-template-columns: 1fr auto; }
+  .facts__row dt { grid-column: 1 / -1; }
+  .facts__row dd { grid-column: 1; }
+  .facts__row .list__end { grid-column: 2; grid-row: 2; }
+}
