@@ -357,6 +357,13 @@ export interface RelPrivate {
 }
 
 // ───────────────────────── Revisões e histórico
+export interface ImportRecord {
+  packageId: string;
+  stepId: string;
+  createdId: string | null;
+  at: ISODateTime;
+}
+
 export interface WeeklyReview {
   id: ID;
   weekStart: ISODate;
@@ -417,4 +424,6 @@ export interface AppState {
   };
   reviews: WeeklyReview[];
   activity: ActivityEntry[];
+  /** Itens de pacotes de importação já aplicados (ver domain/importPackage.ts). */
+  imports: ImportRecord[];
 }

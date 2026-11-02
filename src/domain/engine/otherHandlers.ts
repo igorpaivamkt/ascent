@@ -74,6 +74,9 @@ export function categoryAdd(k: Kernel, { name, kind }: C<'category/add'>): void 
 
 export function budgetSet(k: Kernel, { categoryId, month, amount }: C<'budget/set'>): void {
   if (!Number.isFinite(amount) || amount < 0) k.fail('Valor de orçamento inválido.');
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) k.fail('Mês do orçamento inválido.');
+  const cat = k.d.finance.categories.find((c) => c.id === categoryId);
+  if (!cat || cat.kind !== 'expense') k.fail('Orçamento só vale para uma categoria de gasto existente.');
   const b = k.d.finance.budgets.find((x) => x.categoryId === categoryId && x.month === month);
   if (amount === 0) k.d.finance.budgets = k.d.finance.budgets.filter((x) => x !== b);
   else if (b) b.amount = amount;

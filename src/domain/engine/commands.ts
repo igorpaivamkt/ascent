@@ -109,7 +109,9 @@ export type Command =
   | { type: 'review/save'; weekStart: ISODate; highlights: string; obstacles: string; priorities: string }
   | { type: 'shop/buy'; itemId: string }
   | { type: 'shop/equip'; itemId: string }
-  | { type: 'shop/unequip'; slot: Slot };
+  | { type: 'shop/unequip'; slot: Slot }
+  /** Item de um pacote de importação: aplica o comando interno uma única vez e registra o que ele criou. */
+  | { type: 'import/step'; packageId: string; stepId: string; creates?: string; reuse?: boolean; command: Command };
 
 export type Effect =
   | { type: 'xp'; amount: number; reason: string }

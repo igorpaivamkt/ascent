@@ -26,6 +26,80 @@ function parseUsernameList(raw) {
   return (raw ?? "").split(",").map(normalizeUsername).filter(Boolean);
 }
 
+// src/domain/importPackage.ts
+var IMPORT_TARGETS = {
+  goals: (s) => s.goals,
+  milestones: (s) => s.milestones,
+  projects: (s) => s.projects,
+  habits: (s) => s.habits,
+  tasks: (s) => s.tasks,
+  accounts: (s) => s.finance.accounts,
+  categories: (s) => s.finance.categories,
+  transactions: (s) => s.finance.transactions,
+  "rel.profiles": (s) => s.relationship.profiles,
+  "rel.sections": (s) => s.relationship.sections,
+  "rel.entries": (s) => s.relationship.entries,
+  "rel.wishes": (s) => s.relationship.wishes,
+  "rel.experiences": (s) => s.relationship.experiences,
+  "rel.expenses": (s) => s.relationship.expenses,
+  "rel.dates": (s) => s.relationship.dates,
+  "rel.commitments": (s) => s.relationship.commitments
+};
+var ID_RE = /^[A-Za-z0-9._:-]{1,80}$/;
+function isValidImportId(id) {
+  return typeof id === "string" && ID_RE.test(id);
+}
+var norm = (v) => String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+function keyOfItem(target, item) {
+  switch (target) {
+    case "goals":
+    case "habits":
+      return norm(item.title);
+    case "categories":
+      return `${norm(item.name)}|${String(item.kind)}`;
+    case "accounts":
+      return norm(item.name);
+    case "projects":
+      return `${String(item.goalId)}|${norm(item.title)}`;
+    case "rel.profiles":
+      return "*";
+    case "rel.sections":
+      return `${String(item.profileId)}|${norm(item.title)}`;
+    case "rel.entries":
+      return `${String(item.profileId)}|${String(item.sectionId)}|${norm(item.label || item.value)}`;
+    case "rel.wishes":
+      return `${String(item.profileId)}|${norm(item.title)}`;
+    default:
+      return null;
+  }
+}
+function keyOfCommand(target, c) {
+  const x = c;
+  switch (c.type) {
+    case "goal/create":
+      return target === "goals" ? keyOfItem(target, c.draft) : null;
+    case "habit/create":
+      return target === "habits" ? keyOfItem(target, c.habit) : null;
+    case "category/add":
+      return target === "categories" ? keyOfItem(target, { name: c.name, kind: c.kind }) : null;
+    case "account/upsert":
+      return target === "accounts" ? keyOfItem(target, c.account) : null;
+    case "project/add":
+      return target === "projects" ? keyOfItem(target, { goalId: c.goalId, title: c.title }) : null;
+    case "rel/upsert":
+      return target.startsWith("rel.") && x.value ? keyOfItem(target, c.value) : null;
+    default:
+      return null;
+  }
+}
+function findEquivalent(state, target, command) {
+  const key = keyOfCommand(target, command);
+  if (key === null) return null;
+  const items = IMPORT_TARGETS[target](state);
+  const hit = key === "*" ? items[0] : items.find((it) => keyOfItem(target, it) === key);
+  return hit ? String(hit.id) : null;
+}
+
 // src/domain/config.ts
 var XP_RULES = {
   habitDone: 5,
@@ -811,6 +885,9 @@ function categoryAdd(k, { name, kind }) {
 }
 function budgetSet(k, { categoryId, month, amount }) {
   if (!Number.isFinite(amount) || amount < 0) k.fail("Valor de or\xE7amento inv\xE1lido.");
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) k.fail("M\xEAs do or\xE7amento inv\xE1lido.");
+  const cat = k.d.finance.categories.find((c) => c.id === categoryId);
+  if (!cat || cat.kind !== "expense") k.fail("Or\xE7amento s\xF3 vale para uma categoria de gasto existente.");
   const b = k.d.finance.budgets.find((x) => x.categoryId === categoryId && x.month === month);
   if (amount === 0) k.d.finance.budgets = k.d.finance.budgets.filter((x) => x !== b);
   else if (b) b.amount = amount;
@@ -1117,8 +1194,29 @@ function execute(state, command, ctx) {
   k.settle();
   return { state: draft, effects };
 }
+function importStep(k, c) {
+  if (!isValidImportId(c.packageId) || !isValidImportId(c.stepId)) k.fail("Item de importa\xE7\xE3o inv\xE1lido.");
+  if (!c.command || typeof c.command.type !== "string" || c.command.type === "import/step") k.fail("Comando de importa\xE7\xE3o inv\xE1lido.");
+  if (c.creates !== void 0 && !(c.creates in IMPORT_TARGETS)) k.fail("Destino de importa\xE7\xE3o desconhecido.");
+  if (k.d.imports.some((r) => r.packageId === c.packageId && r.stepId === c.stepId)) return;
+  if (c.reuse && c.creates) {
+    const existing = findEquivalent(k.d, c.creates, c.command);
+    if (existing) {
+      k.d.imports.push({ packageId: c.packageId, stepId: c.stepId, createdId: existing, at: k.at });
+      return;
+    }
+  }
+  const target = c.creates ? IMPORT_TARGETS[c.creates] : null;
+  const before = target ? new Set(target(k.d).map((x) => x.id)) : null;
+  dispatch(k, c.command);
+  const createdId = target && before ? target(k.d).find((x) => !before.has(x.id))?.id ?? null : null;
+  if (target && !createdId) k.fail("O item n\xE3o criou o registro esperado.");
+  k.d.imports.push({ packageId: c.packageId, stepId: c.stepId, createdId, at: k.at });
+}
 function dispatch(k, c) {
   switch (c.type) {
+    case "import/step":
+      return importStep(k, c);
     case "profile/update":
       return profileUpdate(k, c);
     case "settings/update":
@@ -1260,6 +1358,7 @@ function createEmptyState(now, opts = {}) {
     },
     relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], sections: [], entries: [], privateDetails: [] },
     reviews: [],
+    imports: [],
     activity: []
   };
 }

@@ -209,3 +209,16 @@
   .facts__row dd { grid-column: 1; }
   .facts__row .list__end { grid-column: 2; grid-row: 2; }
 }
+
+/* ───────────── Importar dados */
+.import__notes { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--ink-2); }
+.import__list > li { padding: 0; }
+.import__item { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; width: 100%; cursor: pointer; min-width: 0; }
+.import__item input { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--ink); }
+.import__item .list__main { display: grid; gap: 2px; }
+.import__item .list__meta svg { width: 13px; height: 13px; }
+.import__tag { margin-left: 8px; padding: 1px 8px; font-size: 11px; vertical-align: middle; }
+.import__list > li.is-done { opacity: 0.6; }
+.import__list > li.is-blocked .list__meta { color: var(--warn); }
+.import__actions { position: sticky; bottom: calc(var(--nav-h, 64px) + 8px); z-index: 2; }
+@media (min-width: 900px) { .import__actions { bottom: 16px; } }

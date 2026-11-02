@@ -12,6 +12,7 @@ import { RelationshipPage } from '../features/relationships/RelationshipPage';
 import { ReviewPage } from '../features/review/ReviewPage';
 import { RoutinePage } from '../features/routine/RoutinePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
+import { ImportPage } from '../features/settings/ImportPage';
 import { ShopPage } from '../features/shop/ShopPage';
 import { useDocumentPreferences } from '../hooks/usePreferences';
 import { LoginPage } from '../features/auth/LoginPage';
@@ -34,6 +35,7 @@ const ROUTES: { pattern: string; render: (p: Record<string, string>) => ReactNod
   { pattern: '/revisao', render: () => <ReviewPage />, title: 'Revisão semanal' },
   { pattern: '/historico', render: () => <HistoryPage />, title: 'Histórico' },
   { pattern: '/configuracoes', render: () => <SettingsPage />, title: 'Configurações' },
+  { pattern: '/importar', render: () => <ImportPage />, title: 'Importar dados' },
   { pattern: '/inicio', render: () => <OnboardingPage />, title: 'Começar' },
 ];
 

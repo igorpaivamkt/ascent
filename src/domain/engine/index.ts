@@ -1,3 +1,4 @@
+import { findEquivalent, IMPORT_TARGETS, isValidImportId, type ImportTarget } from '../importPackage';
 import type { AppState } from '../types';
 import type { Command, Effect } from './commands';
 import * as G from './goalHandlers';
@@ -27,8 +28,30 @@ export function execute(state: AppState, command: Command, ctx: EngineContext): 
   return { state: draft, effects };
 }
 
+function importStep(k: Kernel, c: Extract<Command, { type: 'import/step' }>): void {
+  if (!isValidImportId(c.packageId) || !isValidImportId(c.stepId)) k.fail('Item de importação inválido.');
+  if (!c.command || typeof c.command.type !== 'string' || c.command.type === 'import/step') k.fail('Comando de importação inválido.');
+  if (c.creates !== undefined && !(c.creates in IMPORT_TARGETS)) k.fail('Destino de importação desconhecido.');
+  // Já aplicado (outro aparelho, reenvio, mesmo arquivo de novo): não faz nada.
+  if (k.d.imports.some((r) => r.packageId === c.packageId && r.stepId === c.stepId)) return;
+  if (c.reuse && c.creates) {
+    const existing = findEquivalent(k.d, c.creates as ImportTarget, c.command);
+    if (existing) {
+      k.d.imports.push({ packageId: c.packageId, stepId: c.stepId, createdId: existing, at: k.at });
+      return;
+    }
+  }
+  const target = c.creates ? IMPORT_TARGETS[c.creates as ImportTarget] : null;
+  const before = target ? new Set(target(k.d).map((x) => x.id)) : null;
+  dispatch(k, c.command);
+  const createdId = target && before ? (target(k.d).find((x) => !before.has(x.id))?.id ?? null) : null;
+  if (target && !createdId) k.fail('O item não criou o registro esperado.');
+  k.d.imports.push({ packageId: c.packageId, stepId: c.stepId, createdId, at: k.at });
+}
+
 function dispatch(k: Kernel, c: Command): void {
   switch (c.type) {
+    case 'import/step': return importStep(k, c);
     case 'profile/update': return O.profileUpdate(k, c);
     case 'settings/update': return O.settingsUpdate(k, c);
     case 'goal/create': return G.goalCreate(k, c);

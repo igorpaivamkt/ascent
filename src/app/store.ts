@@ -2,6 +2,7 @@ import { createContext, useContext, useSyncExternalStore } from 'react';
 import { createDemoState } from '../domain/demo';
 import { DomainError, execute, type Command, type Effect } from '../domain/engine';
 import { createEmptyState, migrateState } from '../domain/initialState';
+import { MODULE_LABEL, planImport, resolveRefs, type ImportPackage, type ImportStep } from '../domain/importPackage';
 import type { AppState } from '../domain/types';
 import type { KeyValueStorage } from '../repositories/localRepository';
 import type { MediaRepository, StateRepository } from '../repositories/types';
@@ -12,6 +13,12 @@ import { HttpTransport, ServerError } from '../services/cloud/transport';
 export interface Notice {
   tone: 'error' | 'success' | 'info';
   message: string;
+}
+
+export interface ImportOutcome {
+  applied: number;
+  skipped: number;
+  failed: { id: string; label: string; error: string }[];
 }
 
 export interface SyncStatus {
@@ -141,6 +148,55 @@ export class AppStore {
     this.setStatus({ pending: engine.pending });
     await this.flush();
     return true;
+  }
+
+  /**
+   * Aplica itens de um pacote de importação, em ordem. Itens já importados são ignorados pelo motor;
+   * itens com erro não interrompem os demais (os que dependem deles ficam de fora). Na nuvem, tudo vai
+   * para a fila de uma vez e é enviado em lotes.
+   */
+  async runImport(pkg: ImportPackage, selected: Set<string>): Promise<ImportOutcome> {
+    if (this.view.mode === 'demo' && !this.isCloud) throw new Error('Você está na demonstração. Comece sua jornada (ou entre na sua conta) antes de importar.');
+    const status = planImport(pkg, this.view, selected);
+    const todo = pkg.steps.filter((s) => selected.has(s.id) && (status.get(s.id) === 'ready' || status.get(s.id) === 'reuse'));
+    const skipped = pkg.steps.filter((s) => status.get(s.id) === 'done').length;
+    const failed: { step: ImportStep; error: string }[] = [];
+    const toCommand = (step: ImportStep, state: AppState): Command => ({
+      type: 'import/step', packageId: pkg.id, stepId: step.id, creates: step.creates, reuse: step.reuse, command: resolveRefs(step.command, state, pkg.id),
+    });
+    let applied = 0;
+    const run = async () => {
+      const engine = this.cloud?.engine;
+      if (engine) {
+        const res = engine.enqueueMany(todo, toCommand);
+        for (const r of res) r.error ? failed.push({ step: r.item, error: r.error }) : applied++;
+        this.commit(engine.view(), engine.confirmed());
+        this.setStatus({ pending: engine.pending });
+        await this.flush();
+        return;
+      }
+      let state = this.view;
+      const effects: Effect[] = [];
+      for (const step of todo) {
+        try {
+          const r = execute(state, toCommand(step, state), { now: new Date(), newId });
+          state = r.state;
+          effects.push(...r.effects);
+          applied++;
+        } catch (e) {
+          failed.push({ step, error: e instanceof Error ? e.message : 'Item inválido.' });
+        }
+      }
+      if (applied) {
+        await this.repo.save(state);
+        this.commit(state, state);
+        if (effects.length) this.effects.emit(effects);
+      }
+    };
+    const p = this.queue.then(run, run);
+    this.queue = p;
+    await p;
+    return { applied, skipped, failed: failed.map((f) => ({ id: f.step.id, label: `${MODULE_LABEL[f.step.module]}: ${f.step.label}`, error: f.error })) };
   }
 
   private reportError(e: unknown) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LuDownload, LuRefreshCw, LuUpload } from 'react-icons/lu';
+import { LuDownload, LuFileUp, LuRefreshCw, LuUpload } from 'react-icons/lu';
 import { Link, navigate } from '../../app/router';
 import { useAppState, useDispatch, useStore, useSyncStatus } from '../../app/store';
 import type { MotionPref, ThemePref } from '../../domain/types';
@@ -77,6 +77,7 @@ export function SettingsPage() {
           <div className="row">
             <button className="btn btn--sm" onClick={exportData}><LuDownload /> Exportar backup (JSON)</button>
             {!cloud && <label className="btn btn--sm"><LuUpload /> Importar backup<input type="file" accept="application/json" className="sr-only" onChange={(e) => importData(e.target.files)} /></label>}
+            <Link to="/importar" className="btn btn--sm"><LuFileUp /> Importar pacote de dados</Link>
           </div>
           <hr className="divider" />
           {cloud ? <p className="xs muted">Recomeçar ou carregar a demonstração só é possível na jornada local: saia da conta primeiro.</p> : <div className="row">

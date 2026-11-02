@@ -92,6 +92,32 @@ export class SyncEngine {
     return env;
   }
 
+  /**
+   * Enfileira vários comandos de uma vez (ex.: importação). Cada um é validado sobre o resultado do
+   * anterior; os inválidos ficam de fora e são devolvidos com o erro. Grava a fila uma única vez.
+   * `build` recebe o estado atual (com os anteriores já aplicados) e devolve o comando, ou lança erro.
+   */
+  enqueueMany<T>(items: T[], build: (item: T, view: AppState) => Command, now = new Date()): { item: T; error: string | null }[] {
+    let view = this.view();
+    const added: CommandEnvelope[] = [];
+    const out: { item: T; error: string | null }[] = [];
+    for (const item of items) {
+      try {
+        const env: CommandEnvelope = { id: newEnvelopeId(), issuedAt: now.toISOString(), command: build(item, view) };
+        view = executeEnvelope(view, env).state;
+        added.push(env);
+        out.push({ item, error: null });
+      } catch (e) {
+        out.push({ item, error: e instanceof Error ? e.message : 'Item inválido.' });
+      }
+    }
+    if (added.length) {
+      this.save({ outbox: [...this.snap.outbox, ...added] });
+      this.cachedView = view;
+    }
+    return out;
+  }
+
   /** Envia a fila. Chamadas concorrentes reaproveitam o mesmo envio. */
   flush(): Promise<FlushOutcome> {
     if (!this.flushing) this.flushing = this.doFlush().finally(() => (this.flushing = null));
