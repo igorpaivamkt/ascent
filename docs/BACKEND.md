@@ -33,15 +33,20 @@ O app abre numa tela de acesso (**Entrar / Criar conta**) com nome de usuário e
 - O Supabase Auth exige e-mail, então cada usuário ganha um endereço interno `usuario@ascent.invalid`
   (domínio reservado pela RFC 2606: nunca recebe mensagens). Quem cria a conta é a Edge Function, pela
   API administrativa, já confirmada: nenhum e-mail é enviado.
-- **Só nomes liberados** podem criar conta e sincronizar. A lista fica em
-  `supabase/functions/ascent-sync/index.ts` (padrão `igorpaiva,eduardogomes`) e pode ser substituída
-  por um secret `ASCENT_USERNAMES` no painel. Conta com token válido mas fora da lista recebe 403.
-- Um nome que já tem conta não pode ser cadastrado de novo (409): ninguém "toma" a conta de outro.
+- **Quem cria as contas é o administrador**, em **Configurações → Administração** (só aparece para ele):
+  listar contas, criar conta com senha provisória, trocar senha, bloquear e liberar acesso.
+- O administrador é definido pelo **id interno** da conta (`ASCENT_ADMIN_IDS`, em
+  `supabase/functions/ascent-sync/index.ts`). Não é segredo e não revela nome de usuário.
+- Contas criadas pelo app recebem a marca `app_metadata.ascent_access`, que só a chave de serviço grava
+  (o próprio usuário não consegue se dar acesso). Sem a marca, o servidor recusa (403).
+- O cadastro pela tela de acesso fica **fechado** por padrão. Para abrir para nomes específicos, crie o
+  secret `ASCENT_USERNAMES` no painel (Edge Functions → Secrets).
+- Um nome que já tem conta não pode ser cadastrado de novo (409).
 - Cada conta só lê e grava a própria jornada (RLS por `auth.uid()` + a função usa o id do token).
 - Senha: mínimo de 8 caracteres; dá para trocar em **Configurações → Conta → Trocar senha**.
   O Supabase limita tentativas de login por IP.
-- Para liberar um novo usuário: acrescente o nome à lista, faça push na `main` e crie a conta pela tela.
-- Para entrar em outro aparelho basta usuário e senha. Com servidor configurado, o app sempre exige login.
+- Recomendado: desligar "Allow new users to sign up" em Authentication → Sign In / Providers
+  (a criação pelo administrador continua funcionando).
 
 ## Segurança implementada
 

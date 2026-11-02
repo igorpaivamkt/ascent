@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { emailToUsername, normalizeUsername, parseUsernameList, passwordError, usernameError, usernameToEmail } from '../src/domain/accounts';
+import { accessRule, supabaseAdmin } from '../src/server/admin';
 import { createHandler, supabaseAuthenticator, supabaseSignup } from '../src/server/http';
 import { MemoryDb } from '../src/server/memoryDb';
 import { AuthClient, MemoryTokenStore } from '../src/services/cloud/auth';
@@ -10,51 +11,64 @@ const URL_ = 'https://proj.supabase.co';
 const SERVICE = 'service-key-de-teste';
 const ALLOWED = ['igorpaiva', 'eduardogomes'];
 
-/** GoTrue falso: API administrativa, /user e login por senha. */
+/** GoTrue falso: API administrativa (criar, listar, alterar), /user e login por senha. */
 function fakeGoTrue() {
-  const users = new Map<string, { id: string; password: string; confirmed: boolean }>();
+  const users = new Map<string, { id: string; password: string; confirmed: boolean; app: Record<string, unknown> }>();
   const tokens = new Map<string, string>(); // token → email
   const adminCalls: { headers: Record<string, string>; body: Record<string, unknown> }[] = [];
   let n = 0;
   const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  const pub = (email: string) => { const u = users.get(email)!; return { id: u.id, email, app_metadata: u.app, created_at: '2026-11-02T00:00:00Z', last_sign_in_at: null }; };
   const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const headers = Object.fromEntries(new Headers(init?.headers).entries());
     const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
-    if (url.pathname === '/auth/v1/admin/users') {
-      adminCalls.push({ headers, body });
+    if (url.pathname.startsWith('/auth/v1/admin/users')) {
       if (headers.authorization !== `Bearer ${SERVICE}`) return reply(401, { msg: 'not admin' });
+      const method = init?.method ?? 'GET';
+      if (method === 'GET') return reply(200, { users: [...users.keys()].map(pub) });
+      if (method === 'PUT') {
+        const id = decodeURIComponent(url.pathname.split('/').pop()!);
+        const entry = [...users.entries()].find(([, u]) => u.id === id);
+        if (!entry) return reply(404, { msg: 'User not found' });
+        if (typeof body.password === 'string') entry[1].password = body.password;
+        if (body.app_metadata) entry[1].app = { ...entry[1].app, ...(body.app_metadata as object) };
+        return reply(200, pub(entry[0]));
+      }
+      adminCalls.push({ headers, body });
       const email = String(body.email);
       if (users.has(email)) return reply(422, { code: 422, error_code: 'email_exists', msg: 'A user with this email address has already been registered' });
-      users.set(email, { id: `00000000-0000-4000-8000-00000000000${++n}`, password: String(body.password), confirmed: body.email_confirm === true });
-      return reply(200, { id: users.get(email)!.id, email });
+      users.set(email, { id: `00000000-0000-4000-8000-00000000000${++n}`, password: String(body.password), confirmed: body.email_confirm === true, app: (body.app_metadata as Record<string, unknown>) ?? {} });
+      return reply(200, pub(email));
     }
     if (url.pathname === '/auth/v1/token') {
       const u = users.get(String(body.email));
       if (!u || u.password !== body.password || !u.confirmed) return reply(400, { error_description: 'Invalid login credentials' });
-      const t = `tok-${body.email}`;
+      const t = `tok-${body.email}-${u.password}`;
       tokens.set(t, String(body.email));
       return reply(200, { access_token: t, refresh_token: `rt-${body.email}`, expires_in: 3600, user: { id: u.id, email: body.email } });
     }
     if (url.pathname === '/auth/v1/user') {
       const email = tokens.get((headers.authorization ?? '').replace('Bearer ', ''));
-      return email ? reply(200, { id: users.get(email)!.id, email }) : reply(401, { msg: 'bad jwt' });
+      return email ? reply(200, pub(email)) : reply(401, { msg: 'bad jwt' });
     }
     return reply(404, {});
   }) as typeof fetch;
   /** Simula uma conta criada por fora (ex.: cadastro por e-mail direto no Supabase). */
   const addExternal = (email: string, password: string) => {
-    users.set(email, { id: `00000000-0000-4000-8000-0000000000${90 + ++n}`, password, confirmed: true });
+    users.set(email, { id: `00000000-0000-4000-8000-0000000000${90 + ++n}`, password, confirmed: true, app: {} });
   };
   return { fetchImpl, users, adminCalls, addExternal };
 }
 
-function server(gt: ReturnType<typeof fakeGoTrue>, db = new MemoryDb()) {
-  const allowUser = (email: string) => ALLOWED.includes(emailToUsername(email) ?? '');
+function server(gt: ReturnType<typeof fakeGoTrue>, db = new MemoryDb(), opts: { adminIds?: string[]; usernames?: string[] } = {}) {
+  const adminIds = opts.adminIds ?? [];
+  const usernames = opts.usernames ?? ALLOWED;
   const handler = createHandler({
     db,
-    authenticate: supabaseAuthenticator(URL_, 'anon', gt.fetchImpl, allowUser),
-    signup: supabaseSignup(URL_, SERVICE, ALLOWED, gt.fetchImpl),
+    authenticate: supabaseAuthenticator(URL_, 'anon', gt.fetchImpl, (u) => accessRule(adminIds, usernames)(u)),
+    signup: supabaseSignup(URL_, SERVICE, usernames, gt.fetchImpl),
+    admin: { ...supabaseAdmin(URL_, SERVICE, adminIds, usernames, gt.fetchImpl), isAdmin: (id) => adminIds.includes(id) },
   });
   const call = async (method: string, route: string, body?: unknown, token?: string) => {
     const res = await handler(new Request(`${URL_}/functions/v1/ascent-sync/${route}`, {
@@ -64,7 +78,7 @@ function server(gt: ReturnType<typeof fakeGoTrue>, db = new MemoryDb()) {
     }));
     return { status: res.status, body: (await res.json()) as Record<string, unknown> };
   };
-  return { handler, call, db };
+  return { handler, call, db, adminIds };
 }
 
 async function login(gt: ReturnType<typeof fakeGoTrue>, username: string, password: string) {
@@ -191,5 +205,56 @@ describe('cliente: login por usuário', () => {
     await assert.rejects(() => auth.signUpUsername('intruso', 'senha-de-teste-3'), /não está liberado/);
     const again = await auth.signInUsername('eduardogomes', 'senha-de-teste-2');
     assert.equal(again.user.id, s.user.id);
+  });
+});
+
+describe('administração de contas', () => {
+  async function setup() {
+    const gt = fakeGoTrue();
+    const srv = server(gt, new MemoryDb(), { adminIds: [], usernames: [] });
+    // conta do Igor já existente (criada antes, sem a marca de acesso): vira admin pelo id
+    gt.addExternal(usernameToEmail('igorpaiva'), 'senha-do-igor-1');
+    srv.adminIds.push(gt.users.get(usernameToEmail('igorpaiva'))!.id);
+    const igor = (await login(gt, 'igorpaiva', 'senha-do-igor-1'))!;
+    return { gt, srv, igor };
+  }
+
+  it('só o administrador vê e usa as rotas de administração', async () => {
+    const { gt, srv, igor } = await setup();
+    assert.deepEqual((await srv.call('GET', 'me', undefined, igor)).body, { userId: gt.users.get(usernameToEmail('igorpaiva'))!.id, isAdmin: true });
+    const created = await srv.call('POST', 'admin/users', { username: 'EduardoGomes', password: 'senha-provisoria-1' }, igor);
+    assert.equal(created.status, 201);
+    assert.equal((created.body.user as { username: string }).username, 'eduardogomes');
+    const edu = (await login(gt, 'eduardogomes', 'senha-provisoria-1'))!;
+    assert.equal((await srv.call('GET', 'me', undefined, edu)).body.isAdmin, false);
+    assert.equal((await srv.call('GET', 'admin/users', undefined, edu)).status, 403);
+    assert.equal((await srv.call('POST', 'admin/users', { username: 'intruso', password: 'senha-qualquer-1' }, edu)).status, 403);
+    const list = (await srv.call('GET', 'admin/users', undefined, igor)).body.users as { username: string; access: boolean; isAdmin: boolean }[];
+    assert.deepEqual(list.map((u) => [u.username, u.access, u.isAdmin]), [['eduardogomes', true, false], ['igorpaiva', true, true]]);
+  });
+
+  it('conta criada pelo administrador sincroniza sem nome nenhum no código; cadastro aberto fica fechado', async () => {
+    const { gt, srv, igor } = await setup();
+    assert.equal((await srv.call('POST', 'signup', { username: 'eduardogomes', password: 'senha-provisoria-1' })).status, 403, 'sem lista, ninguém se cadastra sozinho');
+    await srv.call('POST', 'admin/users', { username: 'eduardogomes', password: 'senha-provisoria-1' }, igor);
+    const edu = (await login(gt, 'eduardogomes', 'senha-provisoria-1'))!;
+    assert.equal((await srv.call('GET', 'state', undefined, edu)).status, 200);
+    assert.equal((await srv.call('GET', 'state', undefined, igor)).status, 200, 'o admin entra mesmo sem a marca de acesso');
+  });
+
+  it('trocar senha, bloquear e liberar acesso', async () => {
+    const { gt, srv, igor } = await setup();
+    const u = (await srv.call('POST', 'admin/users', { username: 'maria', password: 'senha-provisoria-1' }, igor)).body.user as { id: string };
+    assert.equal((await srv.call('POST', 'admin/password', { userId: u.id, password: 'curta' }, igor)).status, 400);
+    assert.equal((await srv.call('POST', 'admin/password', { userId: u.id, password: 'senha-nova-da-maria' }, igor)).status, 200);
+    assert.equal(await login(gt, 'maria', 'senha-provisoria-1'), undefined, 'senha antiga para de funcionar');
+    const maria = (await login(gt, 'maria', 'senha-nova-da-maria'))!;
+    assert.equal((await srv.call('POST', 'admin/access', { userId: u.id, access: false }, igor)).status, 200);
+    assert.equal((await srv.call('GET', 'state', undefined, maria)).status, 403, 'bloqueada não acessa');
+    await srv.call('POST', 'admin/access', { userId: u.id, access: true }, igor);
+    assert.equal((await srv.call('GET', 'state', undefined, maria)).status, 200);
+    const igorId = gt.users.get(usernameToEmail('igorpaiva'))!.id;
+    assert.equal((await srv.call('POST', 'admin/access', { userId: igorId, access: false }, igor)).status, 400, 'admin não se bloqueia');
+    assert.equal((await srv.call('POST', 'admin/users', { username: 'maria', password: 'outra-senha-123' }, igor)).status, 409);
   });
 });

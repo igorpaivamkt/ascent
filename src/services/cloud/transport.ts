@@ -1,5 +1,6 @@
 import type { CommandEnvelope } from '../../domain/sync';
 import type { AppState } from '../../domain/types';
+import type { AdminUser } from '../../server/admin';
 import type { StoredState, SyncResponse } from '../../server/handler';
 import { AuthError, type AuthClient, type CloudConfig } from './auth';
 import { NetworkError, type CloudTransport } from './syncEngine';
@@ -51,5 +52,20 @@ export class HttpTransport implements CloudTransport {
   }
   deleteAccount() {
     return this.req<{ deleted: boolean }>('account', { method: 'DELETE' });
+  }
+  me() {
+    return this.req<{ userId: string; isAdmin: boolean }>('me');
+  }
+  adminListUsers() {
+    return this.req<{ users: AdminUser[] }>('admin/users').then((r) => r.users);
+  }
+  adminCreateUser(username: string, password: string) {
+    return this.req<{ user: AdminUser }>('admin/users', { method: 'POST', body: JSON.stringify({ username, password }) }).then((r) => r.user);
+  }
+  adminSetPassword(userId: string, password: string) {
+    return this.req<{ ok: true }>('admin/password', { method: 'POST', body: JSON.stringify({ userId, password }) });
+  }
+  adminSetAccess(userId: string, access: boolean) {
+    return this.req<{ ok: true }>('admin/access', { method: 'POST', body: JSON.stringify({ userId, access }) });
   }
 }

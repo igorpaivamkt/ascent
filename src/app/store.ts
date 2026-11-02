@@ -260,6 +260,11 @@ export class AppStore {
     return this.cloud?.auth ?? null;
   }
 
+  /** Acesso às rotas da conta (ex.: administração). Só existe com a nuvem configurada. */
+  get cloudTransport(): HttpTransport | null {
+    return this.cloud?.transport ?? null;
+  }
+
   /** Lembrar a sessão neste aparelho (guarda só o refresh token) ou manter apenas em memória. */
   rememberSession(remember: boolean) {
     this.cloud?.auth.setTokenStore(remember ? new LocalTokenStore() : new MemoryTokenStore());

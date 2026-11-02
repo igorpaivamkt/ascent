@@ -9,8 +9,14 @@
  *   POST   …/import   → { state }                 → { state, version }   (migração única do aparelho)
  *   DELETE …/account  → exclui a conta e todos os dados
  *   POST   …/signup   → { username, password }  → { created: true }   (sem token; só usuários liberados)
+ *   GET    …/me                          → { userId, isAdmin }
+ *   GET    …/admin/users                 → { users }            (só administradores)
+ *   POST   …/admin/users                 → { username, password } → { user }
+ *   POST   …/admin/password              → { userId, password }
+ *   POST   …/admin/access                → { userId, access }
  */
 import { normalizeUsername, passwordError, usernameError, usernameToEmail } from '../domain/accounts';
+import type { AdminApi, AuthUser } from './admin';
 import { handleImport, handlePull, handleStatus, handleSync, HttpError, type ServerDb } from './handler';
 
 export interface HttpDeps {
@@ -20,6 +26,8 @@ export interface HttpDeps {
   deleteAccount?: (userId: string) => Promise<void>;
   /** Cria a conta por nome de usuário (já validado e normalizado). Lança HttpError se recusar. */
   signup?: (username: string, password: string) => Promise<void>;
+  /** Administração de contas (rotas /admin/*). */
+  admin?: AdminApi;
   allowedOrigins?: string[];
   now?: () => Date;
 }
@@ -42,7 +50,10 @@ export function createHandler(deps: HttpDeps) {
     const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers });
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     try {
-      const route = new URL(req.url).pathname.split('/').filter(Boolean).pop() ?? '';
+      const segs = new URL(req.url).pathname.split('/').filter(Boolean);
+      const fn = segs.indexOf('ascent-sync');
+      const parts = fn >= 0 ? segs.slice(fn + 1) : segs.slice(-2)[0] === 'admin' ? segs.slice(-2) : segs.slice(-1);
+      const route = parts.join('/');
       if (req.method === 'POST' && route === 'signup' && deps.signup) {
         const text = await req.text();
         if (text.length > 10_000) throw new HttpError(413, 'Requisição grande demais.');
@@ -73,6 +84,23 @@ export function createHandler(deps: HttpDeps) {
           throw new HttpError(400, 'JSON inválido.');
         }
       };
+      if (req.method === 'GET' && route === 'me') return json(200, { userId, isAdmin: !!deps.admin?.isAdmin(userId) });
+      if (route.startsWith('admin/')) {
+        if (!deps.admin || !deps.admin.isAdmin(userId)) throw new HttpError(403, 'Só o administrador pode fazer isso.');
+        const body = req.method === 'POST' ? ((await readBody()) as Record<string, unknown>) : {};
+        const str = (k: string) => (typeof body[k] === 'string' ? (body[k] as string) : '');
+        if (req.method === 'GET' && route === 'admin/users') return json(200, { users: await deps.admin.listUsers() });
+        if (req.method === 'POST' && route === 'admin/users') return json(201, { user: await deps.admin.createUser(str('username'), str('password')) });
+        if (req.method === 'POST' && route === 'admin/password') {
+          await deps.admin.setPassword(str('userId'), str('password'));
+          return json(200, { ok: true });
+        }
+        if (req.method === 'POST' && route === 'admin/access') {
+          await deps.admin.setAccess(str('userId'), body.access === true);
+          return json(200, { ok: true });
+        }
+        throw new HttpError(404, 'Rota não encontrada.');
+      }
       if (req.method === 'GET' && route === 'status') return json(200, await handleStatus(deps.db, userId));
       if (req.method === 'GET' && route === 'state') return json(200, await handlePull(deps.db, userId, now));
       if (req.method === 'POST' && route === 'sync') return json(200, await handleSync(deps.db, userId, await readBody(), now));
@@ -92,15 +120,15 @@ export function createHandler(deps: HttpDeps) {
 
 /**
  * Valida o token chamando o serviço de autenticação do Supabase (GoTrue).
- * `allowUser` (opcional) recusa contas fora da lista de usuários liberados, mesmo com token válido.
+ * `allowUser` (opcional) recusa contas sem acesso liberado, mesmo com token válido.
  */
-export function supabaseAuthenticator(url: string, anonKey: string, fetchImpl: typeof fetch = (...a) => fetch(...a), allowUser?: (email: string) => boolean) {
+export function supabaseAuthenticator(url: string, anonKey: string, fetchImpl: typeof fetch = (...a) => fetch(...a), allowUser?: (user: AuthUser) => boolean) {
   return async (token: string): Promise<string | null> => {
     const res = await fetchImpl(`${url}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
-    const user = (await res.json()) as { id?: string; email?: string };
+    const user = (await res.json()) as { id?: string; email?: string; app_metadata?: Record<string, unknown> };
     if (typeof user.id !== 'string') return null;
-    if (allowUser && !allowUser(user.email ?? '')) throw new HttpError(403, 'Esta conta não está liberada neste app.');
+    if (allowUser && !allowUser({ id: user.id, email: user.email ?? '', appMetadata: user.app_metadata ?? {} })) throw new HttpError(403, 'Esta conta não está liberada neste app.');
     return user.id;
   };
 }
@@ -115,7 +143,7 @@ export function supabaseSignup(url: string, serviceKey: string, allowed: string[
     const res = await fetchImpl(`${url}/auth/v1/admin/users`, {
       method: 'POST',
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: usernameToEmail(username), password, email_confirm: true, user_metadata: { username } }),
+      body: JSON.stringify({ email: usernameToEmail(username), password, email_confirm: true, user_metadata: { username }, app_metadata: { ascent_access: true } }),
     });
     if (res.ok) return;
     const d = (await res.json().catch(() => ({}))) as Record<string, unknown>;

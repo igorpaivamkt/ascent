@@ -1663,6 +1663,78 @@ async function handleImport(db, userId, body, now = /* @__PURE__ */ new Date()) 
   return saved;
 }
 
+// src/server/admin.ts
+var ACCESS_FLAG = "ascent_access";
+function accessRule(adminIds, usernames) {
+  return (u) => adminIds.includes(u.id) || u.appMetadata?.[ACCESS_FLAG] === true || usernames.includes(emailToUsername(u.email) ?? "");
+}
+function supabaseAdmin(url, serviceKey, adminIds, usernames, fetchImpl = (...a) => fetch(...a)) {
+  const allowed = accessRule(adminIds, usernames);
+  const call = async (path, init = {}) => {
+    const res = await fetchImpl(`${url}/auth/v1/admin/${path}`, {
+      ...init,
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" }
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = String(d.msg ?? d.message ?? d.error_description ?? "");
+      const code = String(d.error_code ?? "");
+      if (code === "email_exists" || /already (been )?registered|already exists/i.test(msg)) throw new HttpError(409, "Esse nome de usu\xE1rio j\xE1 tem conta.");
+      if (code === "weak_password" || /password/i.test(msg)) throw new HttpError(400, "A senha n\xE3o atende aos requisitos do servidor. Use uma senha mais forte.");
+      if (res.status === 404) throw new HttpError(404, "Conta n\xE3o encontrada.");
+      console.error("admin", path, res.status, code, msg);
+      throw new HttpError(502, "O servi\xE7o de contas n\xE3o respondeu como esperado.");
+    }
+    return d;
+  };
+  const view = (u) => {
+    const email = u.email ?? "";
+    const auth = { id: u.id, email, appMetadata: u.app_metadata ?? {} };
+    const username = emailToUsername(email);
+    return {
+      id: u.id,
+      username,
+      email: username ? null : email || null,
+      createdAt: u.created_at ?? null,
+      lastSignInAt: u.last_sign_in_at ?? null,
+      access: allowed(auth),
+      isAdmin: adminIds.includes(u.id)
+    };
+  };
+  return {
+    isAdmin: (id) => adminIds.includes(id),
+    async listUsers() {
+      const out = [];
+      for (let page = 1; page <= 10; page++) {
+        const d = await call(`users?page=${page}&per_page=100`);
+        const users = d.users ?? [];
+        out.push(...users.map(view));
+        if (users.length < 100) break;
+      }
+      return out.sort((a, b) => (a.username ?? a.email ?? "").localeCompare(b.username ?? b.email ?? ""));
+    },
+    async createUser(rawUsername, password) {
+      const username = normalizeUsername(rawUsername);
+      const bad = usernameError(username) ?? passwordError(password);
+      if (bad) throw new HttpError(400, bad);
+      const d = await call("users", {
+        method: "POST",
+        body: JSON.stringify({ email: usernameToEmail(username), password, email_confirm: true, user_metadata: { username }, app_metadata: { [ACCESS_FLAG]: true } })
+      });
+      return view(d);
+    },
+    async setPassword(userId, password) {
+      const bad = passwordError(password);
+      if (bad) throw new HttpError(400, bad);
+      await call(`users/${encodeURIComponent(userId)}`, { method: "PUT", body: JSON.stringify({ password }) });
+    },
+    async setAccess(userId, access) {
+      if (adminIds.includes(userId) && !access) throw new HttpError(400, "N\xE3o d\xE1 para tirar o acesso de um administrador.");
+      await call(`users/${encodeURIComponent(userId)}`, { method: "PUT", body: JSON.stringify({ app_metadata: { [ACCESS_FLAG]: access } }) });
+    }
+  };
+}
+
 // src/server/http.ts
 var MAX_BODY = 5e6;
 function cors(origin, allowed) {
@@ -1680,7 +1752,10 @@ function createHandler(deps) {
     const json = (status, body) => new Response(JSON.stringify(body), { status, headers });
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
     try {
-      const route = new URL(req.url).pathname.split("/").filter(Boolean).pop() ?? "";
+      const segs = new URL(req.url).pathname.split("/").filter(Boolean);
+      const fn = segs.indexOf("ascent-sync");
+      const parts = fn >= 0 ? segs.slice(fn + 1) : segs.slice(-2)[0] === "admin" ? segs.slice(-2) : segs.slice(-1);
+      const route = parts.join("/");
       if (req.method === "POST" && route === "signup" && deps.signup) {
         const text = await req.text();
         if (text.length > 1e4) throw new HttpError(413, "Requisi\xE7\xE3o grande demais.");
@@ -1711,6 +1786,23 @@ function createHandler(deps) {
           throw new HttpError(400, "JSON inv\xE1lido.");
         }
       };
+      if (req.method === "GET" && route === "me") return json(200, { userId, isAdmin: !!deps.admin?.isAdmin(userId) });
+      if (route.startsWith("admin/")) {
+        if (!deps.admin || !deps.admin.isAdmin(userId)) throw new HttpError(403, "S\xF3 o administrador pode fazer isso.");
+        const body = req.method === "POST" ? await readBody() : {};
+        const str = (k) => typeof body[k] === "string" ? body[k] : "";
+        if (req.method === "GET" && route === "admin/users") return json(200, { users: await deps.admin.listUsers() });
+        if (req.method === "POST" && route === "admin/users") return json(201, { user: await deps.admin.createUser(str("username"), str("password")) });
+        if (req.method === "POST" && route === "admin/password") {
+          await deps.admin.setPassword(str("userId"), str("password"));
+          return json(200, { ok: true });
+        }
+        if (req.method === "POST" && route === "admin/access") {
+          await deps.admin.setAccess(str("userId"), body.access === true);
+          return json(200, { ok: true });
+        }
+        throw new HttpError(404, "Rota n\xE3o encontrada.");
+      }
       if (req.method === "GET" && route === "status") return json(200, await handleStatus(deps.db, userId));
       if (req.method === "GET" && route === "state") return json(200, await handlePull(deps.db, userId, now));
       if (req.method === "POST" && route === "sync") return json(200, await handleSync(deps.db, userId, await readBody(), now));
@@ -1733,7 +1825,7 @@ function supabaseAuthenticator(url, anonKey, fetchImpl = (...a) => fetch(...a), 
     if (!res.ok) return null;
     const user = await res.json();
     if (typeof user.id !== "string") return null;
-    if (allowUser && !allowUser(user.email ?? "")) throw new HttpError(403, "Esta conta n\xE3o est\xE1 liberada neste app.");
+    if (allowUser && !allowUser({ id: user.id, email: user.email ?? "", appMetadata: user.app_metadata ?? {} })) throw new HttpError(403, "Esta conta n\xE3o est\xE1 liberada neste app.");
     return user.id;
   };
 }
@@ -1743,7 +1835,7 @@ function supabaseSignup(url, serviceKey, allowed, fetchImpl = (...a) => fetch(..
     const res = await fetchImpl(`${url}/auth/v1/admin/users`, {
       method: "POST",
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ email: usernameToEmail(username), password, email_confirm: true, user_metadata: { username } })
+      body: JSON.stringify({ email: usernameToEmail(username), password, email_confirm: true, user_metadata: { username }, app_metadata: { ascent_access: true } })
     });
     if (res.ok) return;
     const d = await res.json().catch(() => ({}));
@@ -1844,13 +1936,14 @@ var SupabaseDb = class {
 // src/server/edgeEntry.ts
 function createEdgeHandler(env, fetchImpl = (...a) => fetch(...a)) {
   const db = new SupabaseDb(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-  const allowed = parseUsernameList(env.ASCENT_USERNAMES);
-  const allowUser = allowed.length ? (email) => allowed.includes(emailToUsername(email) ?? "") : void 0;
+  const usernames = parseUsernameList(env.ASCENT_USERNAMES);
+  const adminIds = (env.ASCENT_ADMIN_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   return createHandler({
     db,
-    authenticate: supabaseAuthenticator(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, fetchImpl, allowUser),
+    authenticate: supabaseAuthenticator(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, fetchImpl, accessRule(adminIds, usernames)),
     deleteAccount: (userId) => db.deleteAccount(userId),
-    signup: supabaseSignup(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, allowed, fetchImpl),
+    signup: supabaseSignup(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, usernames, fetchImpl),
+    admin: supabaseAdmin(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, adminIds, usernames, fetchImpl),
     allowedOrigins: env.ASCENT_ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean)
   });
 }

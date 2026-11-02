@@ -103,7 +103,7 @@ export function LoginPage() {
           <button type="submit" className="btn btn--primary btn--block" disabled={busy || !username || !password || (mode === 'criar' && !confirm)}>
             {busy ? 'Aguarde…' : mode === 'entrar' ? 'Entrar' : 'Criar conta e entrar'}
           </button>
-          {mode === 'criar' && <p className="xs muted">Só nomes de usuário liberados pelo administrador podem criar conta.</p>}
+          {mode === 'criar' && <p className="xs muted">Contas novas normalmente são criadas pelo administrador. Se você recebeu usuário e senha, use "Entrar".</p>}
         </form>
       </div>
       <p className="xs muted login__foot">Cada conta tem a própria jornada. Uma conta não vê os dados de outra.</p>

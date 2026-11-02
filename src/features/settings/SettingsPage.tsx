@@ -6,6 +6,7 @@ import type { MotionPref, ThemePref } from '../../domain/types';
 import { ConfirmButton, Field, Segmented } from '../../components/ui';
 import { DemoBanner } from './DemoBanner';
 import { AccountSection } from './AccountSection';
+import { AdminSection } from './AdminSection';
 
 interface InstallEvent extends Event {
   prompt: () => Promise<void>;
@@ -55,6 +56,7 @@ export function SettingsPage() {
       <header className="page-head"><div><h1>Configurações</h1><p>Preferências, dados e instalação.</p></div></header>
       <div className="grid grid--2">
         <AccountSection />
+        {cloud && <AdminSection />}
         <section className="card settings-section" aria-labelledby="pf-h">
           <h2 id="pf-h">Perfil e jogo</h2>
           <Field label="Seu nome"><input className="input" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name !== state.profile.displayName && dispatch({ type: 'profile/update', displayName: name })} /></Field>
