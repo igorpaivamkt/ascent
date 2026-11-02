@@ -14,6 +14,9 @@ import { RoutinePage } from '../features/routine/RoutinePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { ShopPage } from '../features/shop/ShopPage';
 import { useDocumentPreferences } from '../hooks/usePreferences';
+import { LoginPage } from '../features/auth/LoginPage';
+import { getCloudConfig } from '../services/cloud/config';
+import { useSyncStatus } from './store';
 import { DesktopHeader, Layout } from './Layout';
 import { matchRoute, usePath } from './router';
 
@@ -41,6 +44,16 @@ export function App() {
     document.title = match ? `${match.r.title} · ASCENT` : 'ASCENT';
     window.scrollTo(0, 0);
   }, [path, match]);
+  const status = useSyncStatus();
+  // Com servidor configurado, o app exige login: cada conta só vê a própria jornada.
+  if (getCloudConfig() && status.mode !== 'cloud') {
+    return (
+      <>
+        <LoginPage />
+        <Toaster />
+      </>
+    );
+  }
   return (
     <Layout>
       <DesktopHeader />

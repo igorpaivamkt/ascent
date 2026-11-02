@@ -26,11 +26,28 @@ XP, nível, conquistas e montanha só mudam aqui (efeitos exibidos uma única ve
 
 **Determinismo:** ids de entidades derivam do id do comando e a hora vem do aparelho (aceita até 30 dias no passado e 2 minutos no futuro). Aparelho e servidor chegam exatamente ao mesmo estado — verificado em teste.
 
+## Contas: nome de usuário e senha
+
+O app abre numa tela de acesso (**Entrar / Criar conta**) com nome de usuário e senha, sem e-mail.
+
+- O Supabase Auth exige e-mail, então cada usuário ganha um endereço interno `usuario@ascent.invalid`
+  (domínio reservado pela RFC 2606: nunca recebe mensagens). Quem cria a conta é a Edge Function, pela
+  API administrativa, já confirmada: nenhum e-mail é enviado.
+- **Só nomes liberados** podem criar conta e sincronizar. A lista fica em
+  `supabase/functions/ascent-sync/index.ts` (padrão `igorpaiva,eduardogomes`) e pode ser substituída
+  por um secret `ASCENT_USERNAMES` no painel. Conta com token válido mas fora da lista recebe 403.
+- Um nome que já tem conta não pode ser cadastrado de novo (409): ninguém "toma" a conta de outro.
+- Cada conta só lê e grava a própria jornada (RLS por `auth.uid()` + a função usa o id do token).
+- Senha: mínimo de 8 caracteres; dá para trocar em **Configurações → Conta → Trocar senha**.
+  O Supabase limita tentativas de login por IP.
+- Para liberar um novo usuário: acrescente o nome à lista, faça push na `main` e crie a conta pela tela.
+- Para entrar em outro aparelho basta usuário e senha. Com servidor configurado, o app sempre exige login.
+
 ## Segurança implementada
 
 | Item | Como |
 |---|---|
-| Autenticação | Supabase Auth (e-mail e senha). Senha nunca é guardada no aparelho. |
+| Autenticação | Supabase Auth com nome de usuário e senha (e-mail interno `.invalid`, sem envio). Só usuários liberados. Senha nunca é guardada no aparelho. |
 | Tokens | Sessão em memória por padrão. "Manter conectado" guarda só o refresh token, com aviso. Sair remove token e cópia offline. |
 | Isolamento entre usuários | RLS em todas as tabelas (`user_id = auth.uid()`), `FORCE ROW LEVEL SECURITY`. |
 | Escrita | Usuários não escrevem em nenhuma tabela. Só as funções `SECURITY DEFINER`, executáveis apenas pela `service_role` (Edge Function). |
@@ -73,7 +90,7 @@ ASCENT_SUPABASE_ANON_KEY=sua-anon-key \
 npm run build
 ```
 
-Depois, no app: **Configurações → Conta e sincronização → Criar conta**. Na primeira entrada você escolhe entre enviar a jornada deste aparelho (migração única, verificada) ou começar do zero.
+Depois, no app: tela de acesso → **Criar conta** (nome de usuário liberado + senha). Na primeira entrada você escolhe entre enviar a jornada deste aparelho (migração única, verificada) ou começar do zero.
 
 > A versão publicada como página do Claude não consegue falar com servidores externos (restrição de segurança daquele ambiente). Para testar a nuvem, use `npm run preview`, uma hospedagem própria ou o APK.
 

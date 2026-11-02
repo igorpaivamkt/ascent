@@ -1,5 +1,6 @@
-// E2E da nuvem num navegador real: criar conta → jornada vazia → hábito → XP confirmado → offline →
-// registro pendente sem XP → online → sincroniza → segundo aparelho vê o mesmo → sair/entrar.
+// E2E da nuvem num navegador real: tela de acesso (usuário + senha) → criar conta → jornada vazia → hábito →
+// XP confirmado → offline → pendente → online → sincroniza → segundo aparelho vê o mesmo → outra conta NÃO vê
+// → trocar senha → sair volta para a tela de acesso.
 // Requer: npm run mock:cloud  +  build com ASCENT_SUPABASE_URL=http://localhost:54321  +  npm run preview
 const { chromium } = require('playwright');
 const URL = process.env.URL || 'http://localhost:4173/';
@@ -10,7 +11,8 @@ const check = (ok, msg) => { if (!ok) problems.push(msg); else console.log('✓ 
 
 (async () => {
   const browser = await chromium.launch();
-  const email = `teste${Date.now()}@ascent.dev`;
+  const user = 'teste1';
+  const other = 'teste2';
   const pass = 'senha-forte-123';
   const errors = [];
 
@@ -18,21 +20,32 @@ const check = (ok, msg) => { if (!ok) problems.push(msg); else console.log('✓ 
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
-    await page.goto(URL + '#/configuracoes');
-    await page.waitForSelector('#acc-cloud-h');
+    await page.goto(URL);
+    await page.waitForSelector('main.login');
     return { ctx, page };
+  }
+  async function enter(page, username, password, { create = false } = {}) {
+    if (create) await page.getByRole('tab', { name: 'Criar conta' }).click();
+    await page.getByLabel('Usuário').fill(username);
+    await page.getByLabel('Senha', { exact: true }).fill(password);
+    if (create) await page.getByLabel('Confirmar senha').fill(password);
+    await page.locator('main.login form button[type=submit]').click();
   }
   const xpOf = (page) => page.evaluate(() => document.querySelector('.topbar [aria-label^="Nível"]')?.textContent);
   const badge = (page) => page.locator('.topbar .sync-badge').getAttribute('aria-label');
 
-  // Aparelho 1: criar conta e começar do zero
+  // Aparelho 1: o app abre na tela de acesso; nome fora da lista é recusado
   const a = await newDevice('celular');
-  await a.page.getByLabel('E-mail').fill(email);
-  await a.page.getByLabel('Senha').fill(pass);
-  await a.page.getByRole('button', { name: 'Criar conta' }).click();
-  await a.page.getByRole('button', { name: /Começar do zero na nuvem/ }).click();
+  check((await a.page.locator('input[type=email]').count()) === 0, 'tela de acesso sem campo de e-mail');
+  await enter(a.page, 'intruso', pass, { create: true });
+  await a.page.waitForSelector('main.login .form-error');
+  check(/não está liberado/.test(await a.page.locator('main.login .form-error').textContent()), 'nome de usuário fora da lista não cria conta');
+  await a.page.getByRole('tab', { name: 'Entrar' }).click();
+  await enter(a.page, user, pass, { create: true });
+  await a.page.getByRole('button', { name: /Começar do zero/ }).click();
   await a.page.waitForSelector('.topbar .sync-badge');
-  check((await badge(a.page)).includes('Sincronizado'), 'conta criada e jornada vazia aberta na nuvem');
+  check((await badge(a.page)).includes('Sincronizado'), 'conta criada com usuário e senha; jornada vazia aberta');
+  await a.page.screenshot({ path: `${OUT}/cloud-00-conta.png` });
 
   // Criar hábito e concluir (online)
   await a.page.goto(URL + '#/rotina');
@@ -69,9 +82,10 @@ const check = (ok, msg) => { if (!ok) problems.push(msg); else console.log('✓ 
 
   // Aparelho 2: entrar na mesma conta e ver tudo
   const b = await newDevice('tablet');
-  await b.page.getByLabel('E-mail').fill(email);
-  await b.page.getByLabel('Senha').fill(pass);
-  await b.page.getByRole('button', { name: 'Entrar' }).click();
+  await enter(b.page, user, 'senha-errada-1');
+  await b.page.waitForSelector('main.login .form-error');
+  check(/Usuário ou senha incorretos/.test(await b.page.locator('main.login .form-error').textContent()), 'senha errada é recusada');
+  await enter(b.page, user, pass);
   await b.page.waitForSelector('.topbar .sync-badge');
   await b.page.goto(URL + '#/rotina');
   await b.page.waitForTimeout(500);
@@ -87,12 +101,42 @@ const check = (ok, msg) => { if (!ok) problems.push(msg); else console.log('✓ 
   await b.page.waitForTimeout(800);
   check((await stateXp(b.page)) === before, 'desfazer e refazer em outro aparelho não duplica XP');
 
-  // Sair: a cópia da nuvem é removida do aparelho e a jornada local volta
+  // Outra conta (aparelho 3): não vê nada da primeira
+  const c = await newDevice('outro');
+  await enter(c.page, other, pass, { create: true });
+  await c.page.getByRole('button', { name: /Começar do zero/ }).click();
+  await c.page.waitForSelector('.topbar .sync-badge');
+  await c.page.goto(URL + '#/rotina');
+  await c.page.waitForTimeout(500);
+  check((await c.page.locator('.agenda .list__title', { hasText: 'Ligar para cliente' }).count()) === 0 && (await c.page.locator('.agenda .list__title', { hasText: 'Beber água' }).count()) === 0, 'outra conta não vê a jornada da primeira');
+
+  // Trocar senha e entrar com a nova
   await a.page.goto(URL + '#/configuracoes');
-  await a.page.getByRole('button', { name: 'Sair' }).click();
+  check((await a.page.locator('.kv dd').first().textContent()).trim() === user, 'configurações mostram o nome de usuário (não e-mail)');
+  await a.page.getByRole('button', { name: 'Trocar senha' }).click();
+  await a.page.getByLabel(/^Nova senha/).fill('nova-senha-456');
+  await a.page.getByLabel('Confirmar nova senha').fill('nova-senha-456');
+  await a.page.getByRole('button', { name: 'Salvar nova senha' }).click();
   await a.page.waitForTimeout(500);
+  check((await a.page.getByRole('dialog').count()) === 0, 'senha trocada');
+
+  // Sair: volta para a tela de acesso e nenhum dado/token da conta fica no aparelho
+  await a.page.getByRole('button', { name: 'Sair' }).click();
+  await a.page.waitForSelector('main.login');
   const leftovers = await a.page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('ascent:v1:cloud-snapshot:') || k === 'ascent:v1:refresh').length);
-  check(leftovers === 0, 'sair remove a cópia da nuvem e nenhum token fica no aparelho');
+  check(leftovers === 0, 'sair volta para a tela de acesso e nenhum token fica no aparelho');
+  await enter(a.page, user, pass);
+  await a.page.waitForSelector('main.login .form-error');
+  check(true, 'senha antiga deixa de funcionar');
+  await enter(a.page, user, 'nova-senha-456');
+  await a.page.waitForSelector('.topbar .sync-badge');
+  check(true, 'entra com a senha nova e reabre a mesma jornada');
+
+  // Manter conectado: recarregar a página não pede login de novo
+  await a.page.reload();
+  await a.page.waitForSelector('.topbar .sync-badge');
+  check(true, '"Manter conectado" mantém a sessão ao reabrir');
+  await a.page.screenshot({ path: `${OUT}/cloud-03-logado.png` });
 
   await browser.close();
   if (errors.length) problems.push(...errors);

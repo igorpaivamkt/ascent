@@ -10,5 +10,6 @@ Deno.serve(
     SUPABASE_ANON_KEY: Deno.env.get('SUPABASE_ANON_KEY') ?? '',
     SUPABASE_SERVICE_ROLE_KEY: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     ASCENT_ALLOWED_ORIGINS: Deno.env.get('ASCENT_ALLOWED_ORIGINS') ?? '',
+    ASCENT_USERNAMES: Deno.env.get('ASCENT_USERNAMES') || 'igorpaiva,eduardogomes',
   }),
 );

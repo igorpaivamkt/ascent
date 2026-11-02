@@ -22,6 +22,8 @@ export interface SyncStatus {
   syncing: boolean;
   lastSyncAt: string | null;
   error: string | null;
+  /** Recuperando a sessão lembrada na abertura do app. */
+  restoring: boolean;
 }
 
 type Listener<T> = (value: T) => void;
@@ -76,7 +78,7 @@ export class AppStore {
   ) {
     this.view = initial;
     this.confirmed = initial;
-    this.status = { mode: 'local', email: null, pending: 0, online: typeof navigator === 'undefined' ? true : navigator.onLine, syncing: false, lastSyncAt: null, error: null };
+    this.status = { mode: 'local', email: null, pending: 0, online: typeof navigator === 'undefined' ? true : navigator.onLine, syncing: false, lastSyncAt: null, error: null, restoring: false };
   }
 
   getState = (): AppState => this.view;
@@ -268,6 +270,10 @@ export class AppStore {
     const local = await this.repo.load();
     if (!local || local.mode !== 'real') throw new Error('Não há jornada própria neste aparelho para migrar (a demonstração não é enviada).');
     const s = await link.transport.importState(local);
+    // A jornada agora vive na conta. Limpa a cópia local para que outra conta neste aparelho não a envie de novo.
+    const cleared = createEmptyState(new Date());
+    cleared.settings = { ...cleared.settings, theme: local.settings.theme, motion: local.settings.motion, celebrations: local.settings.celebrations };
+    await this.repo.save(cleared).catch(() => undefined);
     this.attach(session, { confirmed: migrateState(s.state, new Date()), version: s.version, outbox: [], lastSyncAt: new Date().toISOString() });
   }
 
@@ -276,11 +282,16 @@ export class AppStore {
     const auth = this.initCloud(config);
     const store = new LocalTokenStore();
     if (!store.load()) return false;
-    auth.setTokenStore(store);
-    const session = await auth.restore().catch(() => null);
-    if (!session) return false;
-    await this.openCloudJourney().catch(() => undefined);
-    return this.isCloud;
+    this.setStatus({ restoring: true });
+    try {
+      auth.setTokenStore(store);
+      const session = await auth.restore().catch(() => null);
+      if (!session) return false;
+      await this.openCloudJourney().catch(() => undefined);
+      return this.isCloud;
+    } finally {
+      this.setStatus({ restoring: false });
+    }
   }
 
   /** Sai da conta e volta para a jornada local deste aparelho. A cópia offline da nuvem é removida. */

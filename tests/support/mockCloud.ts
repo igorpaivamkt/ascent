@@ -2,10 +2,12 @@
 // Usa o MESMO handler da Edge Function. Dados em memória (somem ao reiniciar). Não usar em produção.
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { emailToUsername, parseUsernameList, usernameToEmail } from '../../src/domain/accounts';
+import { HttpError } from '../../src/server/handler';
 import { createHandler } from '../../src/server/http';
 import { MemoryDb } from '../../src/server/memoryDb';
 
-export function startMockCloud(port = 54321) {
+export function startMockCloud(port = 54321, allowedUsernames = parseUsernameList(process.env.ASCENT_USERNAMES ?? 'igorpaiva,eduardogomes,teste1,teste2')) {
   const db = new MemoryDb();
   const users = new Map<string, { id: string; password: string }>();
   const access = new Map<string, string>();
@@ -20,13 +22,24 @@ export function startMockCloud(port = 54321) {
   const emailOf = (id: string) => [...users.entries()].find(([, u]) => u.id === id)?.[0] ?? '';
   const sync = createHandler({
     db,
-    authenticate: async (t) => access.get(t) ?? null,
+    authenticate: async (t) => {
+      const id = access.get(t) ?? null;
+      if (id && allowedUsernames.length && !allowedUsernames.includes(emailToUsername(emailOf(id)) ?? '')) throw new HttpError(403, 'Esta conta não está liberada neste app.');
+      return id;
+    },
+    // Mesmo contrato da Edge Function (supabaseSignup): só nomes liberados, conta já confirmada.
+    signup: async (username, password) => {
+      if (!allowedUsernames.includes(username)) throw new HttpError(403, 'Este nome de usuário não está liberado para cadastro.');
+      const email = usernameToEmail(username);
+      if (users.has(email)) throw new HttpError(409, 'Esse nome de usuário já tem conta. Use "Entrar".');
+      users.set(email, { id: randomUUID(), password });
+    },
     deleteAccount: async (id) => {
       for (const [k, u] of users) if (u.id === id) users.delete(k);
       db.states.delete(id);
     },
   });
-  const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS' };
+  const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS' };
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const chunks: Buffer[] = [];
@@ -62,6 +75,14 @@ export function startMockCloud(port = 54321) {
       return send(200, issue(id, emailOf(id)));
     }
     if (url.pathname === '/auth/v1/logout') return send(204, {});
+    if (url.pathname === '/auth/v1/user' && req.method === 'PUT') {
+      const id = access.get((req.headers.authorization ?? '').replace('Bearer ', ''));
+      const entry = [...users.values()].find((u) => u.id === id);
+      if (!entry) return send(401, { msg: 'invalid' });
+      if (entry.password === json.password) return send(422, { error_code: 'same_password', msg: 'New password should be different from the old password.' });
+      entry.password = json.password;
+      return send(200, { id, email: emailOf(id!) });
+    }
     if (url.pathname === '/auth/v1/user') {
       const id = access.get((req.headers.authorization ?? '').replace('Bearer ', ''));
       return id ? send(200, { id, email: emailOf(id) }) : send(401, { msg: 'invalid' });

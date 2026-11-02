@@ -6,6 +6,8 @@
  * explícito ao usuário. Senhas nunca são armazenadas. No APK, troque o TokenStore por armazenamento
  * seguro do sistema (Android Keystore) sem mudar o restante do código.
  */
+import { normalizeUsername, passwordError, usernameError, usernameToEmail } from '../../domain/accounts';
+
 export interface CloudConfig {
   url: string;
   anonKey: string;
@@ -60,7 +62,8 @@ export class AuthError extends Error {
 }
 
 const MESSAGES: [RegExp, string][] = [
-  [/invalid login credentials/i, 'E-mail ou senha incorretos.'],
+  [/invalid login credentials/i, 'Usuário ou senha incorretos.'],
+  [/same_password|should be different from the old/i, 'A nova senha precisa ser diferente da atual.'],
   [/email not confirmed/i, 'Confirme seu e-mail pelo link enviado antes de entrar.'],
   [/user already registered/i, 'Este e-mail já tem conta. Use "Entrar".'],
   [/password should be at least/i, 'A senha precisa ter pelo menos 8 caracteres.'],
@@ -100,11 +103,11 @@ export class AuthClient {
     if (this.session) this.tokens.save(this.session.refreshToken);
   }
 
-  private async call(path: string, body: unknown, token?: string): Promise<Record<string, unknown>> {
+  private async call(path: string, body: unknown, token?: string, method = 'POST'): Promise<Record<string, unknown>> {
     let res: Response;
     try {
       res = await this.fetchImpl(`${this.cfg.url}/auth/v1/${path}`, {
-        method: 'POST',
+        method,
         headers: { apikey: this.cfg.anonKey, 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify(body),
       });
@@ -141,6 +144,46 @@ export class AuthClient {
     if (!s) throw new AuthError('Resposta inesperada do servidor de login.');
     this.set(s);
     return s;
+  }
+
+  /**
+   * Cadastro por nome de usuário: a Edge Function cria a conta já confirmada (só nomes liberados)
+   * e, em seguida, entra com a mesma senha.
+   */
+  async signUpUsername(rawUsername: string, password: string): Promise<Session> {
+    const username = normalizeUsername(rawUsername);
+    const bad = usernameError(username) ?? passwordError(password);
+    if (bad) throw new AuthError(bad);
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.cfg.url}/functions/v1/ascent-sync/signup`, {
+        method: 'POST',
+        headers: { apikey: this.cfg.anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+    } catch {
+      throw new AuthError('Sem conexão com o servidor.', 'network');
+    }
+    if (!res.ok) {
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new AuthError(d.error ?? `Erro ${res.status}`, String(res.status));
+    }
+    return this.signInUsername(username, password);
+  }
+
+  async signInUsername(rawUsername: string, password: string): Promise<Session> {
+    const username = normalizeUsername(rawUsername);
+    const bad = usernameError(username);
+    if (bad) throw new AuthError(bad);
+    if (!password) throw new AuthError('Informe a senha.');
+    return this.signIn(usernameToEmail(username), password);
+  }
+
+  /** Troca a senha da conta conectada. */
+  async updatePassword(newPassword: string): Promise<void> {
+    const bad = passwordError(newPassword);
+    if (bad) throw new AuthError(bad);
+    await this.call('user', { password: newPassword }, await this.accessToken(), 'PUT');
   }
 
   /** Recupera a sessão a partir do refresh token guardado (se o usuário optou por manter conectado). */

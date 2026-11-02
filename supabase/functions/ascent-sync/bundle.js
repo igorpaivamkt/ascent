@@ -1,5 +1,31 @@
 // Gerado por scripts/build-server.mjs — não editar.
 
+// src/domain/accounts.ts
+var USERNAME_DOMAIN = "ascent.invalid";
+var PASSWORD_MIN = 8;
+var PASSWORD_MAX = 72;
+function normalizeUsername(raw) {
+  return raw.trim().toLowerCase();
+}
+function usernameError(u) {
+  if (!u) return "Informe o nome de usu\xE1rio.";
+  if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(u)) return "Use de 3 a 30 caracteres: letras sem acento, n\xFAmeros, ponto, h\xEDfen ou sublinhado.";
+  return null;
+}
+function passwordError(p) {
+  if (p.length < PASSWORD_MIN) return `A senha precisa ter pelo menos ${PASSWORD_MIN} caracteres.`;
+  if (p.length > PASSWORD_MAX) return `A senha pode ter no m\xE1ximo ${PASSWORD_MAX} caracteres.`;
+  return null;
+}
+var usernameToEmail = (u) => `${u}@${USERNAME_DOMAIN}`;
+function emailToUsername(email) {
+  const suffix = `@${USERNAME_DOMAIN}`;
+  return email && email.toLowerCase().endsWith(suffix) ? email.slice(0, -suffix.length).toLowerCase() : null;
+}
+function parseUsernameList(raw) {
+  return (raw ?? "").split(",").map(normalizeUsername).filter(Boolean);
+}
+
 // src/domain/config.ts
 var XP_RULES = {
   habitDone: 5,
@@ -1481,11 +1507,27 @@ function createHandler(deps) {
     const json = (status, body) => new Response(JSON.stringify(body), { status, headers });
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
     try {
+      const route = new URL(req.url).pathname.split("/").filter(Boolean).pop() ?? "";
+      if (req.method === "POST" && route === "signup" && deps.signup) {
+        const text = await req.text();
+        if (text.length > 1e4) throw new HttpError(413, "Requisi\xE7\xE3o grande demais.");
+        let body;
+        try {
+          body = JSON.parse(text || "{}");
+        } catch {
+          throw new HttpError(400, "JSON inv\xE1lido.");
+        }
+        const username = normalizeUsername(typeof body.username === "string" ? body.username : "");
+        const password = typeof body.password === "string" ? body.password : "";
+        const bad = usernameError(username) ?? passwordError(password);
+        if (bad) throw new HttpError(400, bad);
+        await deps.signup(username, password);
+        return json(201, { created: true, username });
+      }
       const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
       if (!token) throw new HttpError(401, "Fa\xE7a login para sincronizar.");
       const userId = await deps.authenticate(token);
       if (!userId) throw new HttpError(401, "Sess\xE3o expirada. Entre novamente.");
-      const route = new URL(req.url).pathname.split("/").filter(Boolean).pop() ?? "";
       const now = deps.now?.() ?? /* @__PURE__ */ new Date();
       const readBody = async () => {
         const text = await req.text();
@@ -1512,12 +1554,32 @@ function createHandler(deps) {
     }
   };
 }
-function supabaseAuthenticator(url, anonKey, fetchImpl = fetch) {
+function supabaseAuthenticator(url, anonKey, fetchImpl = (...a) => fetch(...a), allowUser) {
   return async (token) => {
     const res = await fetchImpl(`${url}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
     const user = await res.json();
-    return typeof user.id === "string" ? user.id : null;
+    if (typeof user.id !== "string") return null;
+    if (allowUser && !allowUser(user.email ?? "")) throw new HttpError(403, "Esta conta n\xE3o est\xE1 liberada neste app.");
+    return user.id;
+  };
+}
+function supabaseSignup(url, serviceKey, allowed, fetchImpl = (...a) => fetch(...a)) {
+  return async (username, password) => {
+    if (!allowed.includes(username)) throw new HttpError(403, "Este nome de usu\xE1rio n\xE3o est\xE1 liberado para cadastro.");
+    const res = await fetchImpl(`${url}/auth/v1/admin/users`, {
+      method: "POST",
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ email: usernameToEmail(username), password, email_confirm: true, user_metadata: { username } })
+    });
+    if (res.ok) return;
+    const d = await res.json().catch(() => ({}));
+    const msg = String(d.msg ?? d.message ?? d.error_description ?? "");
+    const code = String(d.error_code ?? d.code ?? "");
+    if (code === "email_exists" || code === "user_already_exists" || /already (been )?registered|already exists/i.test(msg)) throw new HttpError(409, 'Esse nome de usu\xE1rio j\xE1 tem conta. Use "Entrar".');
+    if (code === "weak_password" || /password/i.test(msg)) throw new HttpError(400, "A senha n\xE3o atende aos requisitos do servidor. Use uma senha mais forte.");
+    console.error("signup", res.status, code, msg);
+    throw new HttpError(502, "N\xE3o foi poss\xEDvel criar a conta agora. Tente de novo em instantes.");
   };
 }
 
@@ -1607,12 +1669,15 @@ var SupabaseDb = class {
 };
 
 // src/server/edgeEntry.ts
-function createEdgeHandler(env) {
+function createEdgeHandler(env, fetchImpl = (...a) => fetch(...a)) {
   const db = new SupabaseDb(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const allowed = parseUsernameList(env.ASCENT_USERNAMES);
+  const allowUser = allowed.length ? (email) => allowed.includes(emailToUsername(email) ?? "") : void 0;
   return createHandler({
     db,
-    authenticate: supabaseAuthenticator(env.SUPABASE_URL, env.SUPABASE_ANON_KEY),
+    authenticate: supabaseAuthenticator(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, fetchImpl, allowUser),
     deleteAccount: (userId) => db.deleteAccount(userId),
+    signup: supabaseSignup(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, allowed, fetchImpl),
     allowedOrigins: env.ASCENT_ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean)
   });
 }

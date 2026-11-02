@@ -43,6 +43,7 @@ async function boot() {
   const store = new AppStore(repo, media, state, persistent, storage);
   const root = document.getElementById('root');
   if (!root) return;
+  startCloud(store); // antes de desenhar: a tela de login já sabe se há sessão sendo recuperada
   createRoot(root).render(
     <StrictMode>
       <StoreContext.Provider value={store}>
@@ -52,7 +53,6 @@ async function boot() {
   );
   if (!persistent) store.notify({ tone: 'error', message: 'Armazenamento local indisponível: seus registros não serão mantidos ao fechar esta página.' });
   registerServiceWorker();
-  startCloud(store);
 }
 
 /** Restaura a sessão lembrada e mantém a sincronização em dia (rede voltou, app voltou ao primeiro plano, a cada 60 s). */

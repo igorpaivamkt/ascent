@@ -8,7 +8,9 @@
  *   POST   …/sync     → { commands: [...] }       → { state, version, results }
  *   POST   …/import   → { state }                 → { state, version }   (migração única do aparelho)
  *   DELETE …/account  → exclui a conta e todos os dados
+ *   POST   …/signup   → { username, password }  → { created: true }   (sem token; só usuários liberados)
  */
+import { normalizeUsername, passwordError, usernameError, usernameToEmail } from '../domain/accounts';
 import { handleImport, handlePull, handleStatus, handleSync, HttpError, type ServerDb } from './handler';
 
 export interface HttpDeps {
@@ -16,6 +18,8 @@ export interface HttpDeps {
   /** Valida o token de acesso e devolve o id do usuário (ou null). */
   authenticate: (accessToken: string) => Promise<string | null>;
   deleteAccount?: (userId: string) => Promise<void>;
+  /** Cria a conta por nome de usuário (já validado e normalizado). Lança HttpError se recusar. */
+  signup?: (username: string, password: string) => Promise<void>;
   allowedOrigins?: string[];
   now?: () => Date;
 }
@@ -38,11 +42,27 @@ export function createHandler(deps: HttpDeps) {
     const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers });
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
     try {
+      const route = new URL(req.url).pathname.split('/').filter(Boolean).pop() ?? '';
+      if (req.method === 'POST' && route === 'signup' && deps.signup) {
+        const text = await req.text();
+        if (text.length > 10_000) throw new HttpError(413, 'Requisição grande demais.');
+        let body: { username?: unknown; password?: unknown };
+        try {
+          body = JSON.parse(text || '{}');
+        } catch {
+          throw new HttpError(400, 'JSON inválido.');
+        }
+        const username = normalizeUsername(typeof body.username === 'string' ? body.username : '');
+        const password = typeof body.password === 'string' ? body.password : '';
+        const bad = usernameError(username) ?? passwordError(password);
+        if (bad) throw new HttpError(400, bad);
+        await deps.signup(username, password);
+        return json(201, { created: true, username });
+      }
       const token = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '');
       if (!token) throw new HttpError(401, 'Faça login para sincronizar.');
       const userId = await deps.authenticate(token);
       if (!userId) throw new HttpError(401, 'Sessão expirada. Entre novamente.');
-      const route = new URL(req.url).pathname.split('/').filter(Boolean).pop() ?? '';
       const now = deps.now?.() ?? new Date();
       const readBody = async () => {
         const text = await req.text();
@@ -70,12 +90,40 @@ export function createHandler(deps: HttpDeps) {
   };
 }
 
-/** Valida o token chamando o serviço de autenticação do Supabase (GoTrue). */
-export function supabaseAuthenticator(url: string, anonKey: string, fetchImpl: typeof fetch = fetch) {
+/**
+ * Valida o token chamando o serviço de autenticação do Supabase (GoTrue).
+ * `allowUser` (opcional) recusa contas fora da lista de usuários liberados, mesmo com token válido.
+ */
+export function supabaseAuthenticator(url: string, anonKey: string, fetchImpl: typeof fetch = (...a) => fetch(...a), allowUser?: (email: string) => boolean) {
   return async (token: string): Promise<string | null> => {
     const res = await fetchImpl(`${url}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
-    const user = (await res.json()) as { id?: string };
-    return typeof user.id === 'string' ? user.id : null;
+    const user = (await res.json()) as { id?: string; email?: string };
+    if (typeof user.id !== 'string') return null;
+    if (allowUser && !allowUser(user.email ?? '')) throw new HttpError(403, 'Esta conta não está liberada neste app.');
+    return user.id;
+  };
+}
+
+/**
+ * Cria a conta pela API administrativa do Supabase Auth, já confirmada (nenhum e-mail é enviado).
+ * Só para nomes da lista `allowed`; lista vazia = cadastro fechado.
+ */
+export function supabaseSignup(url: string, serviceKey: string, allowed: string[], fetchImpl: typeof fetch = (...a) => fetch(...a)) {
+  return async (username: string, password: string): Promise<void> => {
+    if (!allowed.includes(username)) throw new HttpError(403, 'Este nome de usuário não está liberado para cadastro.');
+    const res = await fetchImpl(`${url}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: usernameToEmail(username), password, email_confirm: true, user_metadata: { username } }),
+    });
+    if (res.ok) return;
+    const d = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const msg = String(d.msg ?? d.message ?? d.error_description ?? '');
+    const code = String(d.error_code ?? d.code ?? '');
+    if (code === 'email_exists' || code === 'user_already_exists' || /already (been )?registered|already exists/i.test(msg)) throw new HttpError(409, 'Esse nome de usuário já tem conta. Use "Entrar".');
+    if (code === 'weak_password' || /password/i.test(msg)) throw new HttpError(400, 'A senha não atende aos requisitos do servidor. Use uma senha mais forte.');
+    console.error('signup', res.status, code, msg);
+    throw new HttpError(502, 'Não foi possível criar a conta agora. Tente de novo em instantes.');
   };
 }

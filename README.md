@@ -25,7 +25,7 @@ Protótipo funcional, mobile-first, que combina objetivos, rotina, finanças e r
 | **Revisão e histórico** | Revisão semanal com dados reais da semana (+XP uma única vez). Histórico com filtros por período, área e objetivo. |
 | **Configurações** | Nome, nome da moeda, tema claro/escuro/sistema, animações (sistema/reduzidas/completas), efeitos de comemoração, exportar/importar backup JSON, limpar demonstração, instalar PWA. |
 | **PWA** | Manifest, ícones (incl. maskable), service worker com pré-cache gerado no build, abre offline. |
-| **Conta e nuvem** | Login por e-mail, sincronização por comandos idempotentes, fila offline, recompensas recalculadas no servidor, livros-razão imutáveis com chave única, RLS por usuário, migração verificada dos dados do aparelho, exclusão de conta. Detalhes em **docs/BACKEND.md**. |
+| **Conta e nuvem** | Tela de acesso com nome de usuário e senha (só usuários liberados, contas isoladas), sincronização por comandos idempotentes, fila offline, recompensas recalculadas no servidor, livros-razão imutáveis com chave única, RLS por usuário, migração verificada dos dados do aparelho, exclusão de conta. Detalhes em **docs/BACKEND.md**. |
 
 ## 2. Arquitetura
 
