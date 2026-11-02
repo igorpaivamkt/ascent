@@ -6,3 +6,6 @@ android/app/build/
 android/.gradle/
 *.log
 .DS_Store
+
+# saídas das verificações de interface
+flow-*.png
