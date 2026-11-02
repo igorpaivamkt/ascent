@@ -77,6 +77,16 @@ Depois, no app: **Configurações → Conta e sincronização → Criar conta**.
 
 > A versão publicada como página do Claude não consegue falar com servidores externos (restrição de segurança daquele ambiente). Para testar a nuvem, use `npm run preview`, uma hospedagem própria ou o APK.
 
+## Implantação automática (GitHub ↔ Supabase)
+
+Este repositório está ligado ao projeto Supabase pela integração do GitHub (Settings → Integrations):
+pasta `.`, branch de produção `main`, "Deploy to production" ligado. A cada push na `main`, o Supabase
+aplica as migrações novas de `supabase/migrations/` e publica as funções de `supabase/functions/`
+(com `verify_jwt = false`, conforme `supabase/config.toml`). O GitHub Actions, em paralelo, testa e
+publica o app no GitHub Pages.
+
+Antes de alterar o motor, rode `npm run build:server` para atualizar `bundle.js` da função.
+
 ## Testar sem nuvem
 
 ```bash
