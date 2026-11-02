@@ -9,7 +9,7 @@ import { AuthClient, MemoryTokenStore } from '../src/services/cloud/auth';
 
 const URL_ = 'https://proj.supabase.co';
 const SERVICE = 'service-key-de-teste';
-const ALLOWED = ['igorpaiva', 'eduardogomes'];
+const ALLOWED = ['anasouza', 'brunocosta'];
 
 /** GoTrue falso: API administrativa (criar, listar, alterar), /user e login por senha. */
 function fakeGoTrue() {
@@ -91,17 +91,17 @@ const env = (n: number) => ({ id: `comando-${n}-0000`, issuedAt: new Date().toIS
 
 describe('nomes de usuário', () => {
   it('normaliza, valida e converte para o e-mail interno (domínio reservado .invalid)', () => {
-    assert.equal(normalizeUsername('  IgorPaiva '), 'igorpaiva');
-    assert.equal(usernameError('igorpaiva'), null);
-    assert.equal(usernameError('eduardogomes'), null);
+    assert.equal(normalizeUsername('  AnaSouza '), 'anasouza');
+    assert.equal(usernameError('anasouza'), null);
+    assert.equal(usernameError('brunocosta'), null);
     assert.ok(usernameError('ab'));
     assert.ok(usernameError('igor paiva'));
     assert.ok(usernameError('igor@gmail.com'));
     assert.ok(usernameError('joão'));
-    assert.equal(usernameToEmail('igorpaiva'), 'igorpaiva@ascent.invalid');
-    assert.equal(emailToUsername('igorpaiva@ascent.invalid'), 'igorpaiva');
+    assert.equal(usernameToEmail('anasouza'), 'anasouza@ascent.invalid');
+    assert.equal(emailToUsername('anasouza@ascent.invalid'), 'anasouza');
     assert.equal(emailToUsername('igor@gmail.com'), null);
-    assert.deepEqual(parseUsernameList(' IgorPaiva, eduardogomes ,,'), ['igorpaiva', 'eduardogomes']);
+    assert.deepEqual(parseUsernameList(' AnaSouza, brunocosta ,,'), ['anasouza', 'brunocosta']);
     assert.equal(passwordError('1234567'), 'A senha precisa ter pelo menos 8 caracteres.');
     assert.equal(passwordError('12345678'), null);
   });
@@ -111,14 +111,14 @@ describe('cadastro por nome de usuário', () => {
   it('cria a conta já confirmada, sem e-mail, só pela chave de serviço', async () => {
     const gt = fakeGoTrue();
     const { call } = server(gt);
-    const r = await call('POST', 'signup', { username: ' IgorPaiva ', password: 'senha-de-teste-1' });
+    const r = await call('POST', 'signup', { username: ' AnaSouza ', password: 'senha-de-teste-1' });
     assert.equal(r.status, 201);
-    assert.equal(r.body.username, 'igorpaiva');
+    assert.equal(r.body.username, 'anasouza');
     assert.equal(gt.adminCalls.length, 1);
-    assert.equal(gt.adminCalls[0].body.email, 'igorpaiva@ascent.invalid');
+    assert.equal(gt.adminCalls[0].body.email, 'anasouza@ascent.invalid');
     assert.equal(gt.adminCalls[0].body.email_confirm, true, 'confirmada: nenhum e-mail de confirmação é enviado');
     assert.equal(gt.adminCalls[0].headers.authorization, `Bearer ${SERVICE}`);
-    assert.ok(await login(gt, 'igorpaiva', 'senha-de-teste-1'), 'consegue entrar com usuário e senha');
+    assert.ok(await login(gt, 'anasouza', 'senha-de-teste-1'), 'consegue entrar com usuário e senha');
   });
 
   it('recusa nome fora da lista, nome inválido, senha curta e nome repetido', async () => {
@@ -126,19 +126,19 @@ describe('cadastro por nome de usuário', () => {
     const { call } = server(gt);
     assert.equal((await call('POST', 'signup', { username: 'intruso', password: 'senha-de-teste-1' })).status, 403);
     assert.equal((await call('POST', 'signup', { username: 'a b', password: 'senha-de-teste-1' })).status, 400);
-    assert.equal((await call('POST', 'signup', { username: 'igorpaiva', password: 'curta' })).status, 400);
+    assert.equal((await call('POST', 'signup', { username: 'anasouza', password: 'curta' })).status, 400);
     assert.equal(gt.adminCalls.length, 0, 'nada chega ao Auth quando a validação falha');
-    assert.equal((await call('POST', 'signup', { username: 'igorpaiva', password: 'senha-de-teste-1' })).status, 201);
-    const dup = await call('POST', 'signup', { username: 'igorpaiva', password: 'outra-senha-123' });
+    assert.equal((await call('POST', 'signup', { username: 'anasouza', password: 'senha-de-teste-1' })).status, 201);
+    const dup = await call('POST', 'signup', { username: 'anasouza', password: 'outra-senha-123' });
     assert.equal(dup.status, 409, 'ninguém "toma" uma conta existente cadastrando de novo');
-    assert.ok(await login(gt, 'igorpaiva', 'senha-de-teste-1'), 'a senha original continua valendo');
-    assert.equal(await login(gt, 'igorpaiva', 'outra-senha-123'), undefined);
+    assert.ok(await login(gt, 'anasouza', 'senha-de-teste-1'), 'a senha original continua valendo');
+    assert.equal(await login(gt, 'anasouza', 'outra-senha-123'), undefined);
   });
 
   it('com lista vazia, o cadastro fica fechado', async () => {
     const gt = fakeGoTrue();
     const signup = supabaseSignup(URL_, SERVICE, [], gt.fetchImpl);
-    await assert.rejects(() => signup('igorpaiva', 'senha-de-teste-1'), /não está liberado/);
+    await assert.rejects(() => signup('anasouza', 'senha-de-teste-1'), /não está liberado/);
   });
 });
 
@@ -146,10 +146,10 @@ describe('isolamento entre contas', () => {
   it('cada conta só vê e altera a própria jornada', async () => {
     const gt = fakeGoTrue();
     const { call } = server(gt);
-    await call('POST', 'signup', { username: 'igorpaiva', password: 'senha-de-teste-1' });
-    await call('POST', 'signup', { username: 'eduardogomes', password: 'senha-de-teste-2' });
-    const igor = await login(gt, 'igorpaiva', 'senha-de-teste-1');
-    const edu = await login(gt, 'eduardogomes', 'senha-de-teste-2');
+    await call('POST', 'signup', { username: 'anasouza', password: 'senha-de-teste-1' });
+    await call('POST', 'signup', { username: 'brunocosta', password: 'senha-de-teste-2' });
+    const igor = await login(gt, 'anasouza', 'senha-de-teste-1');
+    const edu = await login(gt, 'brunocosta', 'senha-de-teste-2');
     assert.ok(igor && edu && igor !== edu);
 
     const s1 = await call('POST', 'sync', { commands: [env(1)] }, igor);
@@ -196,14 +196,14 @@ describe('cliente: login por usuário', () => {
     }) as typeof fetch;
     const store = new MemoryTokenStore();
     const auth = new AuthClient({ url: URL_, anonKey: 'anon' }, store, fetchImpl);
-    const s = await auth.signUpUsername('EduardoGomes', 'senha-de-teste-2');
-    assert.equal(s.user.email, 'eduardogomes@ascent.invalid');
+    const s = await auth.signUpUsername('BrunoCosta', 'senha-de-teste-2');
+    assert.equal(s.user.email, 'brunocosta@ascent.invalid');
     assert.deepEqual(calls, ['/functions/v1/ascent-sync/signup', '/auth/v1/token']);
-    assert.equal(store.load(), 'rt-eduardogomes@ascent.invalid', 'só o refresh token é guardado');
+    assert.equal(store.load(), 'rt-brunocosta@ascent.invalid', 'só o refresh token é guardado');
     await auth.signOut();
-    await assert.rejects(() => auth.signInUsername('eduardogomes', 'errada-123'), /Usuário ou senha incorretos/);
+    await assert.rejects(() => auth.signInUsername('brunocosta', 'errada-123'), /Usuário ou senha incorretos/);
     await assert.rejects(() => auth.signUpUsername('intruso', 'senha-de-teste-3'), /não está liberado/);
-    const again = await auth.signInUsername('eduardogomes', 'senha-de-teste-2');
+    const again = await auth.signInUsername('brunocosta', 'senha-de-teste-2');
     assert.equal(again.user.id, s.user.id);
   });
 });
@@ -213,31 +213,31 @@ describe('administração de contas', () => {
     const gt = fakeGoTrue();
     const srv = server(gt, new MemoryDb(), { adminIds: [], usernames: [] });
     // conta do Igor já existente (criada antes, sem a marca de acesso): vira admin pelo id
-    gt.addExternal(usernameToEmail('igorpaiva'), 'senha-do-igor-1');
-    srv.adminIds.push(gt.users.get(usernameToEmail('igorpaiva'))!.id);
-    const igor = (await login(gt, 'igorpaiva', 'senha-do-igor-1'))!;
+    gt.addExternal(usernameToEmail('anasouza'), 'senha-do-igor-1');
+    srv.adminIds.push(gt.users.get(usernameToEmail('anasouza'))!.id);
+    const igor = (await login(gt, 'anasouza', 'senha-do-igor-1'))!;
     return { gt, srv, igor };
   }
 
   it('só o administrador vê e usa as rotas de administração', async () => {
     const { gt, srv, igor } = await setup();
-    assert.deepEqual((await srv.call('GET', 'me', undefined, igor)).body, { userId: gt.users.get(usernameToEmail('igorpaiva'))!.id, isAdmin: true });
-    const created = await srv.call('POST', 'admin/users', { username: 'EduardoGomes', password: 'senha-provisoria-1' }, igor);
+    assert.deepEqual((await srv.call('GET', 'me', undefined, igor)).body, { userId: gt.users.get(usernameToEmail('anasouza'))!.id, isAdmin: true });
+    const created = await srv.call('POST', 'admin/users', { username: 'BrunoCosta', password: 'senha-provisoria-1' }, igor);
     assert.equal(created.status, 201);
-    assert.equal((created.body.user as { username: string }).username, 'eduardogomes');
-    const edu = (await login(gt, 'eduardogomes', 'senha-provisoria-1'))!;
+    assert.equal((created.body.user as { username: string }).username, 'brunocosta');
+    const edu = (await login(gt, 'brunocosta', 'senha-provisoria-1'))!;
     assert.equal((await srv.call('GET', 'me', undefined, edu)).body.isAdmin, false);
     assert.equal((await srv.call('GET', 'admin/users', undefined, edu)).status, 403);
     assert.equal((await srv.call('POST', 'admin/users', { username: 'intruso', password: 'senha-qualquer-1' }, edu)).status, 403);
     const list = (await srv.call('GET', 'admin/users', undefined, igor)).body.users as { username: string; access: boolean; isAdmin: boolean }[];
-    assert.deepEqual(list.map((u) => [u.username, u.access, u.isAdmin]), [['eduardogomes', true, false], ['igorpaiva', true, true]]);
+    assert.deepEqual(list.map((u) => [u.username, u.access, u.isAdmin]), [['anasouza', true, true], ['brunocosta', true, false]]);
   });
 
   it('conta criada pelo administrador sincroniza sem nome nenhum no código; cadastro aberto fica fechado', async () => {
     const { gt, srv, igor } = await setup();
-    assert.equal((await srv.call('POST', 'signup', { username: 'eduardogomes', password: 'senha-provisoria-1' })).status, 403, 'sem lista, ninguém se cadastra sozinho');
-    await srv.call('POST', 'admin/users', { username: 'eduardogomes', password: 'senha-provisoria-1' }, igor);
-    const edu = (await login(gt, 'eduardogomes', 'senha-provisoria-1'))!;
+    assert.equal((await srv.call('POST', 'signup', { username: 'brunocosta', password: 'senha-provisoria-1' })).status, 403, 'sem lista, ninguém se cadastra sozinho');
+    await srv.call('POST', 'admin/users', { username: 'brunocosta', password: 'senha-provisoria-1' }, igor);
+    const edu = (await login(gt, 'brunocosta', 'senha-provisoria-1'))!;
     assert.equal((await srv.call('GET', 'state', undefined, edu)).status, 200);
     assert.equal((await srv.call('GET', 'state', undefined, igor)).status, 200, 'o admin entra mesmo sem a marca de acesso');
   });
@@ -253,7 +253,7 @@ describe('administração de contas', () => {
     assert.equal((await srv.call('GET', 'state', undefined, maria)).status, 403, 'bloqueada não acessa');
     await srv.call('POST', 'admin/access', { userId: u.id, access: true }, igor);
     assert.equal((await srv.call('GET', 'state', undefined, maria)).status, 200);
-    const igorId = gt.users.get(usernameToEmail('igorpaiva'))!.id;
+    const igorId = gt.users.get(usernameToEmail('anasouza'))!.id;
     assert.equal((await srv.call('POST', 'admin/access', { userId: igorId, access: false }, igor)).status, 400, 'admin não se bloqueia');
     assert.equal((await srv.call('POST', 'admin/users', { username: 'maria', password: 'outra-senha-123' }, igor)).status, 409);
   });

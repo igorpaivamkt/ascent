@@ -8,7 +8,7 @@ import { HttpError } from '../../src/server/handler';
 import { createHandler } from '../../src/server/http';
 import { MemoryDb } from '../../src/server/memoryDb';
 
-export function startMockCloud(port = 54321, allowedUsernames = parseUsernameList(process.env.ASCENT_USERNAMES ?? 'igorpaiva,eduardogomes,teste1,teste2')) {
+export function startMockCloud(port = 54321, allowedUsernames = parseUsernameList(process.env.ASCENT_USERNAMES ?? 'anasouza,brunocosta,teste1,teste2')) {
   const db = new MemoryDb();
   const users = new Map<string, { id: string; password: string; access?: boolean; createdAt: string; lastSignInAt: string | null }>();
   const access = new Map<string, string>();
@@ -21,8 +21,8 @@ export function startMockCloud(port = 54321, allowedUsernames = parseUsernameLis
     return { access_token: a, refresh_token: r, expires_in: 3600, token_type: 'bearer', user: { id: userId, email } };
   };
   const emailOf = (id: string) => [...users.entries()].find(([, u]) => u.id === id)?.[0] ?? '';
-  // Administrador do servidor local: a conta com este nome (padrão: igorpaiva), quando existir.
-  const adminName = process.env.MOCK_ADMIN ?? 'igorpaiva';
+  // Administrador do servidor local: a conta com este nome (padrão: anasouza), quando existir.
+  const adminName = process.env.MOCK_ADMIN ?? 'anasouza';
   const adminIds = () => { const u = users.get(usernameToEmail(adminName)); return u ? [u.id] : []; };
   const rule = (u: { id: string; email: string; appMetadata: Record<string, unknown> }) => accessRule(adminIds(), allowedUsernames)(u);
   const view = (email: string): AdminUser => {
