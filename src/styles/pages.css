@@ -222,3 +222,4 @@
 .import__list > li.is-blocked .list__meta { color: var(--warn); }
 .import__actions { position: sticky; bottom: calc(var(--nav-h, 64px) + 8px); z-index: 2; }
 @media (min-width: 900px) { .import__actions { bottom: 16px; } }
+.rel-linked { padding: 0 8px; font-size: 11px; }

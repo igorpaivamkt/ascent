@@ -194,3 +194,25 @@ describe('perfil da pessoa: jornada gravada antes da atualização', () => {
     assert.deepEqual(engine.view().relationship.entries, []);
   });
 });
+
+describe('gastos do relacionamento ligados a Finanças', () => {
+  it('valor e data vêm da transação; editar ou excluir a transação reflete no gasto', () => {
+    const { r, pid } = withProfile();
+    r.run({ type: 'category/add', name: 'Relacionamento', kind: 'expense' });
+    const cat = r.state.finance.categories.find((c) => c.name === 'Relacionamento')!.id;
+    const tx = { description: 'Cinema', amount: 84, type: 'expense' as const, categoryId: cat, accountId: 'acc-principal', date: '2026-10-11', status: 'settled' as const, incomeClass: null, origin: '', note: '' };
+    r.run({ type: 'tx/upsert', tx });
+    const txId = r.state.finance.transactions[0].id;
+    r.run({ type: 'rel/upsert', entity: 'expenses', value: { profileId: pid, experienceId: null, description: 'Cinema', amount: 1, category: 'Passeios', date: '2000-01-01', paidBy: 'eu', txId } });
+    let e = r.state.relationship.expenses[0];
+    assert.equal(e.amount, 84, 'o valor vem de Finanças');
+    assert.equal(e.date, '2026-10-11');
+    assert.throws(() => r.run({ type: 'rel/upsert', entity: 'expenses', value: { profileId: pid, experienceId: null, description: 'Dup', amount: 84, category: 'Passeios', date: '2026-10-11', paidBy: 'eu', txId } }), /já está ligada/);
+    r.run({ type: 'tx/upsert', tx: { ...tx, id: txId, amount: 90, date: '2026-10-12' } });
+    e = r.state.relationship.expenses[0];
+    assert.deepEqual([e.amount, e.date], [90, '2026-10-12'], 'editar em Finanças atualiza o relacionamento');
+    assert.throws(() => r.run({ type: 'tx/upsert', tx: { ...tx, id: txId, type: 'income', categoryId: 'cat-salario', incomeClass: 'outros' } }), /continuar sendo um gasto/);
+    r.run({ type: 'tx/remove', txId });
+    assert.equal(r.state.relationship.expenses.length, 0, 'excluir em Finanças remove o gasto ligado');
+  });
+});

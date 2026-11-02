@@ -312,6 +312,8 @@ export interface RelExpense {
   category: string;
   date: ISODate;
   paidBy: 'eu' | 'dividido' | 'outra pessoa';
+  /** Transação de Finanças correspondente: valor e data vêm dela (uma fonte só, sem contar duas vezes). */
+  txId?: ID | null;
 }
 export interface RelCommitment {
   id: ID;

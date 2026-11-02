@@ -256,7 +256,9 @@ function Expenses({ profile }: { profile: RelProfile }) {
   const today = useToday();
   const list = state.relationship.expenses.filter((e) => e.profileId === profile.id).sort((a, b) => b.date.localeCompare(a.date));
   const exps = state.relationship.experiences.filter((e) => e.profileId === profile.id);
+  const store = useStore();
   const [f, setF] = useState({ description: '', amount: '', category: 'Restaurantes', date: today, experienceId: '', paidBy: 'eu' as RelExpense['paidBy'] });
+  const [alsoFinance, setAlsoFinance] = useState(true);
   const byMonth = new Map<string, number>();
   const byCat = new Map<string, number>();
   for (const e of list) {
@@ -271,11 +273,12 @@ function Expenses({ profile }: { profile: RelProfile }) {
         <dl className="kv" style={{ marginBottom: 12 }}>
           <div><dt>Este mês</dt><dd>{money0(byMonth.get(monthKey(today)) ?? 0)}</dd></div>
           <div><dt>No ano</dt><dd>{money0(year)}</dd></div>
+          <div><dt>Total registrado</dt><dd>{money0(list.reduce((a, e) => a + e.amount, 0))}</dd></div>
         </dl>
         <ul className="list">
           {list.map((e) => (
             <li key={e.id}>
-              <div className="list__main"><div className="list__title">{e.description}</div><div className="list__meta"><span>{formatDate(e.date)}</span><span>{e.category}</span><span>Pago por: {e.paidBy}</span>{e.experienceId && <span>{exps.find((x) => x.id === e.experienceId)?.title}</span>}</div></div>
+              <div className="list__main"><div className="list__title">{e.description}</div><div className="list__meta"><span>{formatDate(e.date)}</span><span>{e.category}</span><span>Pago por: {e.paidBy}</span>{e.experienceId && <span>{exps.find((x) => x.id === e.experienceId)?.title}</span>}{e.txId && <span className="chip chip--muted rel-linked">em Finanças</span>}</div></div>
               <span className="tx-amount">{money(e.amount)}</span>
               <ConfirmButton className="icon-btn" ariaLabel={`Excluir ${e.description}`} confirmLabel="Excluir" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'expenses', id: e.id })}><LuTrash2 /></ConfirmButton>
             </li>
@@ -297,8 +300,23 @@ function Expenses({ profile }: { profile: RelProfile }) {
               <Field label="Pago por"><select className="select" value={f.paidBy} onChange={(e) => setF({ ...f, paidBy: e.target.value as RelExpense['paidBy'] })}><option value="eu">Eu</option><option value="dividido">Dividido</option><option value="outra pessoa">Outra pessoa</option></select></Field>
             </div>
             <Field label="Experiência relacionada"><select className="select" value={f.experienceId} onChange={(e) => setF({ ...f, experienceId: e.target.value })}><option value="">Nenhuma</option>{exps.map((x) => <option key={x.id} value={x.id}>{x.title} ({formatDate(x.date)})</option>)}</select></Field>
+            {f.paidBy !== 'outra pessoa' && (
+              <label className="check"><input type="checkbox" checked={alsoFinance} onChange={(e) => setAlsoFinance(e.target.checked)} /> Lançar também em Finanças (categoria Relacionamento)</label>
+            )}
             <button className="btn btn--primary" onClick={async () => {
-              const ok = await dispatch({ type: 'rel/upsert', entity: 'expenses', value: { profileId: profile.id, description: f.description, amount: parseNumber(f.amount), category: f.category, date: f.date, experienceId: f.experienceId || null, paidBy: f.paidBy } });
+              const amount = parseNumber(f.amount);
+              const base = { profileId: profile.id, description: f.description, amount, category: f.category, date: f.date, experienceId: f.experienceId || null, paidBy: f.paidBy };
+              let txId: string | null = null;
+              if (alsoFinance && f.paidBy !== 'outra pessoa') {
+                if (!f.description.trim() || !(amount > 0)) return store.notify({ tone: 'error', message: 'Preencha a descrição e um valor maior que zero.' });
+                const findCat = () => store.getState().finance.categories.find((c) => c.kind === 'expense' && c.name.trim().toLowerCase() === 'relacionamento');
+                if (!findCat() && !(await dispatch({ type: 'category/add', name: 'Relacionamento', kind: 'expense' }))) return;
+                const before = new Set(store.getState().finance.transactions.map((t) => t.id));
+                const accountId = store.getState().finance.accounts[0]?.id ?? '';
+                if (!(await dispatch({ type: 'tx/upsert', tx: { description: `${f.description.trim()} (${profile.name})`, amount, type: 'expense', categoryId: findCat()!.id, accountId, date: f.date, status: 'settled', incomeClass: null, origin: 'Relacionamento', note: '' } }))) return;
+                txId = store.getState().finance.transactions.find((t) => !before.has(t.id))?.id ?? null;
+              }
+              const ok = await dispatch({ type: 'rel/upsert', entity: 'expenses', value: { ...base, txId } });
               if (ok) setF({ ...f, description: '', amount: '' });
             }}><LuPlus /> Registrar gasto</button>
           </div>

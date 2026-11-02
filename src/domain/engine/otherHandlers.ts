@@ -35,7 +35,10 @@ export function txUpsert(k: Kernel, { tx }: C<'tx/upsert'>): void {
   const value = { ...tx, description: tx.description.trim(), amount: Math.round(tx.amount * 100) / 100, incomeClass: tx.type === 'income' ? tx.incomeClass : null };
   const existing = tx.id ? k.d.finance.transactions.find((t) => t.id === tx.id) : undefined;
   if (existing) {
+    const linked = k.d.relationship.expenses.filter((e) => e.txId === existing.id);
+    if (linked.length && value.type !== 'expense') k.fail('Esta transação está ligada a um gasto do relacionamento e precisa continuar sendo um gasto.');
     Object.assign(existing, value, { updatedAt: k.at });
+    for (const e of linked) Object.assign(e, { amount: existing.amount, date: existing.date }); // mantém os dois lados iguais
     k.log('financas', 'tx', `Transação editada: ${value.description}`, money(value.amount));
   } else {
     const t: Transaction = { ...value, id: k.id(), createdAt: k.at, updatedAt: k.at };
@@ -47,6 +50,7 @@ export function txUpsert(k: Kernel, { tx }: C<'tx/upsert'>): void {
 export function txRemove(k: Kernel, { txId }: C<'tx/remove'>): void {
   const t = k.d.finance.transactions.find((x) => x.id === txId) ?? k.fail('Transação não encontrada.');
   k.d.finance.transactions = k.d.finance.transactions.filter((x) => x.id !== txId);
+  k.d.relationship.expenses = k.d.relationship.expenses.filter((e) => e.txId !== txId); // gasto ligado sai junto
   k.log('financas', 'tx', `Transação removida: ${t.description}`, money(t.amount));
 }
 
@@ -138,6 +142,13 @@ export function relUpsert(k: Kernel, c: C<'rel/upsert'>): void {
   if (c.entity === 'sections' || c.entity === 'entries') normalizeProfileData(k, c.entity, v);
   const text = (v.title ?? v.value ?? v.name ?? v.description) as string | undefined;
   if (typeof text === 'string' && !text.trim()) k.fail('Preencha o campo principal.');
+  if (c.entity === 'expenses' && v.txId) {
+    const tx = k.d.finance.transactions.find((t) => t.id === v.txId) ?? k.fail('Transação de Finanças não encontrada.');
+    if (tx.type !== 'expense') k.fail('Só um gasto pode ser ligado ao relacionamento.');
+    if (k.d.relationship.expenses.some((e) => e.txId === tx.id && e.id !== v.id)) k.fail('Essa transação já está ligada a outro gasto.');
+    v.amount = tx.amount;
+    v.date = tx.date;
+  }
   if (c.entity === 'expenses' && !(Number(v.amount) > 0)) k.fail('O valor precisa ser maior que zero.');
   if (c.entity !== 'profiles' && !k.d.relationship.profiles.some((p) => p.id === v.profileId)) k.fail('Perfil não encontrado.');
   const existing = v.id ? list.find((x) => x.id === v.id) : undefined;
