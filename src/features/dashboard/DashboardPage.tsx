@@ -22,6 +22,7 @@ import { CharacterPreview } from '../mountain/CharacterPreview';
 import { Journey } from '../mountain/Journey';
 import { ExperienceForm } from '../relationships/ExperienceForm';
 import { AgendaList, HabitForm, TaskForm } from '../routine/RoutineParts';
+import { SavingsReminder } from '../finance/SavingsView';
 import { DemoBanner } from '../settings/DemoBanner';
 
 type Quick = null | 'action' | 'expense' | 'income' | 'habit' | 'experience' | 'step';
@@ -32,6 +33,7 @@ export function DashboardPage() {
   return (
     <>
       <DemoBanner />
+      <SavingsReminder />
       <div className="dash">
         <div className="dash__hero">
           <Journey goal={g.priority} variant="hero" overlay />

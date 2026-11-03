@@ -135,3 +135,56 @@ export function upcoming(state: AppState, today: ISODate, limit = 5): Transactio
 
 export const TX_STATUS_LABEL = { planned: 'Previsto', pending: 'Pendente', settled: 'Realizado' } as const;
 export const INCOME_CLASS_LABEL = { renda_pessoal: 'Renda pessoal', faturamento: 'Faturamento (negócio)', outros: 'Outras entradas' } as const;
+
+export interface RangeSummary {
+  from: ISODate;
+  to: ISODate;
+  incomeSettled: number;
+  expenseSettled: number;
+  balanceSettled: number;
+  incomeExpected: number;
+  expenseExpected: number;
+  personalIncome: number;
+  count: number;
+  byCategory: { name: string; amount: number }[];
+  incomeByCategory: { name: string; amount: number }[];
+}
+
+/** Movimento de um período qualquer (de/até, inclusive). Transferências entre contas ficam de fora dos totais. */
+export function rangeSummary(state: AppState, from: ISODate, to: ISODate): RangeSummary {
+  const s: RangeSummary = { from, to, incomeSettled: 0, expenseSettled: 0, balanceSettled: 0, incomeExpected: 0, expenseExpected: 0, personalIncome: 0, count: 0, byCategory: [], incomeByCategory: [] };
+  const catName = new Map(state.finance.categories.map((c) => [c.id, c.name]));
+  const isTransfer = (t: Transaction) => /^transfer[eê]ncia entre contas$/i.test(catName.get(t.categoryId) ?? '');
+  const out = new Map<string, number>();
+  const inc = new Map<string, number>();
+  for (const t of rangeTransactions(state, from, to)) {
+    s.count++;
+    if (isTransfer(t)) continue;
+    const name = catName.get(t.categoryId) ?? 'Sem categoria';
+    if (t.status === 'settled') {
+      if (t.type === 'income') {
+        s.incomeSettled += t.amount;
+        if (t.incomeClass === 'renda_pessoal') s.personalIncome += t.amount;
+        inc.set(name, (inc.get(name) ?? 0) + t.amount);
+      } else {
+        s.expenseSettled += t.amount;
+        out.set(name, (out.get(name) ?? 0) + t.amount);
+      }
+    } else if (t.type === 'income') s.incomeExpected += t.amount;
+    else s.expenseExpected += t.amount;
+  }
+  const sorted = (m: Map<string, number>) => [...m.entries()].map(([name, amount]) => ({ name, amount: round(amount) })).sort((a, b) => b.amount - a.amount);
+  s.byCategory = sorted(out);
+  s.incomeByCategory = sorted(inc);
+  s.incomeSettled = round(s.incomeSettled);
+  s.expenseSettled = round(s.expenseSettled);
+  s.balanceSettled = round(s.incomeSettled - s.expenseSettled);
+  s.incomeExpected = round(s.incomeExpected);
+  s.expenseExpected = round(s.expenseExpected);
+  s.personalIncome = round(s.personalIncome);
+  return s;
+}
+
+export function rangeTransactions(state: AppState, from: ISODate, to: ISODate): Transaction[] {
+  return state.finance.transactions.filter((t) => t.date >= from && t.date <= to).sort((a, b) => b.date.localeCompare(a.date));
+}

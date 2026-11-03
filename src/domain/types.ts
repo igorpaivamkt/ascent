@@ -229,6 +229,38 @@ export interface Account {
   type: 'corrente' | 'poupanca' | 'carteira' | 'investimento' | 'cartao';
   openingBalance: number;
 }
+/**
+ * Poupança por cofrinhos (envelopes): cada cofrinho separa parte do seu dinheiro. O saldo das contas
+ * continua o mesmo; "livre para gastar" = saldo das contas − total guardado nos cofrinhos.
+ */
+export type SavingsRuleKind = 'fixed' | 'percent' | 'none';
+export interface SavingsBox {
+  id: ID;
+  name: string;
+  description: string;
+  /** Meta de valor (opcional) e prazo (opcional): permitem calcular quanto guardar por mês. */
+  targetAmount: number | null;
+  targetDate: ISODate | null;
+  /** Regra mensal: valor fixo ou % da renda pessoal recebida no mês. */
+  ruleKind: SavingsRuleKind;
+  ruleAmount: number;
+  rulePercent: number;
+  /** Mês a partir do qual a regra vale (YYYY-MM). */
+  startMonth: string;
+  /** Meta de Metas ligada: cada depósito atualiza o indicador dela com o saldo do cofrinho. */
+  goalId: ID | null;
+  status: 'active' | 'archived';
+  createdAt: ISODateTime;
+}
+export interface SavingsMove {
+  id: ID;
+  boxId: ID;
+  date: ISODate;
+  /** Positivo = guardou; negativo = retirou. */
+  amount: number;
+  note: string;
+  createdAt: ISODateTime;
+}
 export interface Category {
   id: ID;
   name: string;
@@ -359,6 +391,19 @@ export interface RelPrivate {
 }
 
 // ───────────────────────── Revisões e histórico
+/** Revisão livre de qualquer período (mês, trimestre, de/até). A semanal continua em `reviews`. */
+export interface PeriodReview {
+  id: ID;
+  from: ISODate;
+  to: ISODate;
+  title: string;
+  highlights: string;
+  obstacles: string;
+  priorities: string;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
 export interface ImportRecord {
   packageId: string;
   stepId: string;
@@ -411,7 +456,7 @@ export interface AppState {
   progressEvents: ProgressEvent[];
   inventory: InventoryItem[];
   equipped: Equipped;
-  finance: { accounts: Account[]; categories: Category[]; transactions: Transaction[]; budgets: Budget[] };
+  finance: { accounts: Account[]; categories: Category[]; transactions: Transaction[]; budgets: Budget[]; savings: { boxes: SavingsBox[]; moves: SavingsMove[] } };
   relationship: {
     profiles: RelProfile[];
     preferences: RelPreference[];
@@ -425,6 +470,7 @@ export interface AppState {
     privateDetails: RelPrivate[];
   };
   reviews: WeeklyReview[];
+  periodReviews: PeriodReview[];
   activity: ActivityEntry[];
   /** Itens de pacotes de importação já aplicados (ver domain/importPackage.ts). */
   imports: ImportRecord[];

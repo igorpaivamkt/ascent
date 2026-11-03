@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { LuCalendar, LuCheck, LuEye, LuEyeOff, LuGift, LuHeart, LuLock, LuPencil, LuPlus, LuTrash2, LuX } from 'react-icons/lu';
+import { LuCalendar, LuCheck, LuEye, LuEyeOff, LuFileDown, LuGift, LuHeart, LuLock, LuPencil, LuPlus, LuTrash2, LuX } from 'react-icons/lu';
 import { useAppState, useDispatch, useStore } from '../../app/store';
 import { formatDate, formatMonth, monthKey } from '../../domain/dates';
 import type { RelCommitment, RelDate, RelExpense, RelExperience, RelPreference, RelProfile, RelWish } from '../../domain/types';
@@ -45,7 +45,10 @@ export function RelationshipPage() {
             <p>{profile.nickname ? `“${profile.nickname}” · ` : ''}{profile.since ? `Juntos desde ${formatDate(profile.since, { year: true })}` : 'Memória pessoal estruturada'}</p>
           </div>
         </div>
-        <button className="btn btn--sm" onClick={() => setEditProfile(true)}><LuPencil /> Editar perfil</button>
+        <div className="row">
+          <button className="btn btn--sm" onClick={() => setEditProfile(true)}><LuPencil /> Editar perfil</button>
+          <a className="btn btn--sm" href="#/relatorio/relacionamento"><LuFileDown /> Exportar</a>
+        </div>
       </header>
       <p className="note small" style={{ marginBottom: 16 }}><LuLock />Espaço privado para ser mais atento e presente. Não há pontuações sobre sentimentos ou compromisso da outra pessoa — e nada daqui aparece em notificações.</p>
       <Tabs value={tab} onChange={setTab} label="Seções do relacionamento" options={[{ value: 'perfil', label: 'Perfil' }, { value: 'preferencias', label: 'Preferências' }, { value: 'experiencias', label: 'Experiências' }, { value: 'gastos', label: 'Gastos' }, { value: 'compromissos', label: 'Compromissos' }, { value: 'privado', label: 'Dados privados' }]} />

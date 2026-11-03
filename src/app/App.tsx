@@ -13,6 +13,7 @@ import { ReviewPage } from '../features/review/ReviewPage';
 import { RoutinePage } from '../features/routine/RoutinePage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { ImportPage } from '../features/settings/ImportPage';
+import { ReportPage, type ReportKind } from '../features/reports/ReportPage';
 import { ShopPage } from '../features/shop/ShopPage';
 import { useDocumentPreferences } from '../hooks/usePreferences';
 import { LoginPage } from '../features/auth/LoginPage';
@@ -32,7 +33,7 @@ const ROUTES: { pattern: string; render: (p: Record<string, string>) => ReactNod
   { pattern: '/relacionamento', render: () => <RelationshipPage />, title: 'Relacionamento' },
   { pattern: '/conquistas', render: () => <AchievementsPage />, title: 'Conquistas' },
   { pattern: '/loja', render: () => <ShopPage />, title: 'Loja' },
-  { pattern: '/revisao', render: () => <ReviewPage />, title: 'Revisão semanal' },
+  { pattern: '/revisao', render: () => <ReviewPage />, title: 'Revisão' },
   { pattern: '/historico', render: () => <HistoryPage />, title: 'Histórico' },
   { pattern: '/configuracoes', render: () => <SettingsPage />, title: 'Configurações' },
   { pattern: '/importar', render: () => <ImportPage />, title: 'Importar dados' },
@@ -55,6 +56,15 @@ export function App() {
         <LoginPage />
         <Toaster />
       </>
+    );
+  }
+  // Relatórios para exportar: página de papel, sem a navegação do app.
+  const report = /^\/relatorio\/(financas|relacionamento|revisao)$/.exec(path);
+  if (report) {
+    return (
+      <ErrorBoundary resetKey={path}>
+        <ReportPage kind={report[1] as ReportKind} />
+      </ErrorBoundary>
     );
   }
   return (

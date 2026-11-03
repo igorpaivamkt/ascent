@@ -46,9 +46,11 @@ export function createEmptyState(now: Date, opts: { mode?: AppState['mode']; dis
       categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
       transactions: [],
       budgets: [],
+      savings: { boxes: [], moves: [] },
     },
     relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], sections: [], entries: [], privateDetails: [] },
     reviews: [],
+    periodReviews: [],
     imports: [],
     activity: [],
   };
@@ -70,7 +72,7 @@ export function migrateState(raw: unknown, now: Date): AppState {
     profile: { ...base.profile, ...r.profile },
     settings: { ...base.settings, ...r.settings },
     equipped: { ...base.equipped, ...r.equipped },
-    finance: { ...base.finance, ...r.finance },
+    finance: { ...base.finance, ...r.finance, savings: { ...base.finance.savings, ...(r.finance as Partial<AppState['finance']> | undefined)?.savings } },
     relationship: { ...base.relationship, ...r.relationship },
     schemaVersion: SCHEMA_VERSION,
   };

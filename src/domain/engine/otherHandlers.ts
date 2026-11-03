@@ -221,6 +221,29 @@ export function relPrivateClear(k: Kernel, { profileId }: C<'rel/private/clear'>
   k.d.relationship.privateDetails = k.d.relationship.privateDetails.filter((p) => p.profileId !== profileId);
 }
 
+// ───────────────────────── Revisão de período livre
+export function periodReviewSave(k: Kernel, c: C<'review/period/save'>): void {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(c.from) || !iso.test(c.to) || c.from > c.to) k.fail('Período inválido.');
+  if (c.from > k.today) k.fail('Esse período ainda não começou.');
+  const clip = (v: string, n: number) => (v ?? '').trim().slice(0, n);
+  const value = { from: c.from, to: c.to, title: clip(c.title, 80), highlights: clip(c.highlights, 4000), obstacles: clip(c.obstacles, 4000), priorities: clip(c.priorities, 4000) };
+  if (!value.highlights && !value.obstacles && !value.priorities) k.fail('Escreva pelo menos uma parte da reflexão.');
+  const existing = c.id ? k.d.periodReviews.find((r) => r.id === c.id) : k.d.periodReviews.find((r) => r.from === c.from && r.to === c.to);
+  if (existing) {
+    Object.assign(existing, value, { updatedAt: k.at });
+    return;
+  }
+  if (k.d.periodReviews.length >= 500) k.fail('Limite de revisões atingido.');
+  k.d.periodReviews.push({ id: k.id(), ...value, createdAt: k.at, updatedAt: k.at });
+  k.log('revisao', 'period', `Revisão registrada: ${value.title || `${c.from} a ${c.to}`}`, '');
+}
+
+export function periodReviewRemove(k: Kernel, { id }: C<'review/period/remove'>): void {
+  if (!k.d.periodReviews.some((r) => r.id === id)) k.fail('Revisão não encontrada.');
+  k.d.periodReviews = k.d.periodReviews.filter((r) => r.id !== id);
+}
+
 // ───────────────────────── Revisão semanal
 export function reviewSave(k: Kernel, c: C<'review/save'>): void {
   if (c.weekStart > k.today) k.fail('Essa semana ainda não começou.');

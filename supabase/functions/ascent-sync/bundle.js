@@ -43,7 +43,9 @@ var IMPORT_TARGETS = {
   "rel.experiences": (s) => s.relationship.experiences,
   "rel.expenses": (s) => s.relationship.expenses,
   "rel.dates": (s) => s.relationship.dates,
-  "rel.commitments": (s) => s.relationship.commitments
+  "rel.commitments": (s) => s.relationship.commitments,
+  "savings.boxes": (s) => s.finance.savings.boxes,
+  "savings.moves": (s) => s.finance.savings.moves
 };
 var ID_RE = /^[A-Za-z0-9._:-]{1,80}$/;
 function isValidImportId(id) {
@@ -69,6 +71,8 @@ function keyOfItem(target, item) {
       return `${String(item.profileId)}|${String(item.sectionId)}|${norm(item.label || item.value)}`;
     case "rel.wishes":
       return `${String(item.profileId)}|${norm(item.title)}`;
+    case "savings.boxes":
+      return norm(item.name);
     default:
       return null;
   }
@@ -86,6 +90,8 @@ function keyOfCommand(target, c) {
       return target === "accounts" ? keyOfItem(target, c.account) : null;
     case "project/add":
       return target === "projects" ? keyOfItem(target, { goalId: c.goalId, title: c.title }) : null;
+    case "savings/box/upsert":
+      return target === "savings.boxes" ? keyOfItem(target, c.box) : null;
     case "rel/upsert":
       return target.startsWith("rel.") && x.value ? keyOfItem(target, c.value) : null;
     default:
@@ -112,7 +118,9 @@ var XP_RULES = {
   weeklyReview: 25,
   resultRecorded: 15,
   relExperience: 10,
-  relCommitmentDone: 10
+  relCommitmentDone: 10,
+  /** Cofrinho em dia no mês (guardou pelo menos o valor da regra). Uma vez por cofrinho por mês. */
+  savingsMonthMet: 15
 };
 var COIN_RULES = {
   missionDone: 30,
@@ -1027,6 +1035,26 @@ function relPrivateSet(k, c) {
 function relPrivateClear(k, { profileId }) {
   k.d.relationship.privateDetails = k.d.relationship.privateDetails.filter((p) => p.profileId !== profileId);
 }
+function periodReviewSave(k, c) {
+  const iso = /^\d{4}-\d{2}-\d{2}$/;
+  if (!iso.test(c.from) || !iso.test(c.to) || c.from > c.to) k.fail("Per\xEDodo inv\xE1lido.");
+  if (c.from > k.today) k.fail("Esse per\xEDodo ainda n\xE3o come\xE7ou.");
+  const clip2 = (v, n) => (v ?? "").trim().slice(0, n);
+  const value = { from: c.from, to: c.to, title: clip2(c.title, 80), highlights: clip2(c.highlights, 4e3), obstacles: clip2(c.obstacles, 4e3), priorities: clip2(c.priorities, 4e3) };
+  if (!value.highlights && !value.obstacles && !value.priorities) k.fail("Escreva pelo menos uma parte da reflex\xE3o.");
+  const existing = c.id ? k.d.periodReviews.find((r) => r.id === c.id) : k.d.periodReviews.find((r) => r.from === c.from && r.to === c.to);
+  if (existing) {
+    Object.assign(existing, value, { updatedAt: k.at });
+    return;
+  }
+  if (k.d.periodReviews.length >= 500) k.fail("Limite de revis\xF5es atingido.");
+  k.d.periodReviews.push({ id: k.id(), ...value, createdAt: k.at, updatedAt: k.at });
+  k.log("revisao", "period", `Revis\xE3o registrada: ${value.title || `${c.from} a ${c.to}`}`, "");
+}
+function periodReviewRemove(k, { id }) {
+  if (!k.d.periodReviews.some((r) => r.id === id)) k.fail("Revis\xE3o n\xE3o encontrada.");
+  k.d.periodReviews = k.d.periodReviews.filter((r) => r.id !== id);
+}
 function reviewSave(k, c) {
   if (c.weekStart > k.today) k.fail("Essa semana ainda n\xE3o come\xE7ou.");
   const st = routineStats(k.d, c.weekStart, addDays(c.weekStart, 6), k.today);
@@ -1196,6 +1224,176 @@ function taskRemove(k, { taskId }) {
   k.d.tasks = k.d.tasks.filter((x) => x.id !== taskId);
 }
 
+// src/domain/finance.ts
+var round = (n) => Math.round(n * 100) / 100;
+function monthTransactions(state, month) {
+  return state.finance.transactions.filter((t) => monthKey(t.date) === month);
+}
+function monthSummary(state, month) {
+  const s = {
+    month,
+    incomeSettled: 0,
+    expenseSettled: 0,
+    balanceSettled: 0,
+    incomeExpected: 0,
+    expenseExpected: 0,
+    projectedBalance: 0,
+    personalIncome: 0,
+    businessRevenue: 0,
+    otherIncome: 0,
+    savingsRate: null,
+    count: 0
+  };
+  for (const t of monthTransactions(state, month)) {
+    s.count++;
+    const settled = t.status === "settled";
+    if (t.type === "income") {
+      if (settled) {
+        s.incomeSettled += t.amount;
+        if (t.incomeClass === "renda_pessoal") s.personalIncome += t.amount;
+        else if (t.incomeClass === "faturamento") s.businessRevenue += t.amount;
+        else s.otherIncome += t.amount;
+      } else s.incomeExpected += t.amount;
+    } else if (settled) s.expenseSettled += t.amount;
+    else s.expenseExpected += t.amount;
+  }
+  s.incomeSettled = round(s.incomeSettled);
+  s.expenseSettled = round(s.expenseSettled);
+  s.balanceSettled = round(s.incomeSettled - s.expenseSettled);
+  s.incomeExpected = round(s.incomeExpected);
+  s.expenseExpected = round(s.expenseExpected);
+  s.projectedBalance = round(s.balanceSettled + s.incomeExpected - s.expenseExpected);
+  s.savingsRate = s.incomeSettled > 0 ? s.balanceSettled / s.incomeSettled : null;
+  return s;
+}
+
+// src/domain/savings.ts
+var round2 = (n) => Math.round(n * 100) / 100;
+function boxBalance(state, boxId, upTo) {
+  return round2(state.finance.savings.moves.filter((m) => m.boxId === boxId && (!upTo || m.date <= upTo)).reduce((a, m) => a + m.amount, 0));
+}
+function depositedInMonth(state, boxId, month) {
+  return round2(state.finance.savings.moves.filter((m) => m.boxId === boxId && monthKey(m.date) === month).reduce((a, m) => a + m.amount, 0));
+}
+function monthQuota(state, box, month) {
+  if (box.status !== "active" || month < box.startMonth || box.ruleKind === "none") return { amount: 0, basis: "none", income: 0 };
+  if (box.ruleKind === "fixed") return { amount: round2(box.ruleAmount), basis: "fixed", income: 0 };
+  const s = monthSummary(state, month);
+  const planned = state.finance.transactions.filter((t) => t.type === "income" && t.status !== "settled" && t.incomeClass === "renda_pessoal" && monthKey(t.date) === month).reduce((a, t) => a + t.amount, 0);
+  const received = s.personalIncome;
+  const income = received > 0 ? received : planned;
+  return { amount: round2(income * box.rulePercent / 100), basis: received > 0 ? "percent_received" : "percent_planned", income: round2(income) };
+}
+
+// src/domain/engine/savingsHandlers.ts
+var round3 = (n) => Math.round(n * 100) / 100;
+var MAX_BOXES = 20;
+var ISO = /^\d{4}-\d{2}-\d{2}$/;
+var MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+function getBox(k, id) {
+  return k.d.finance.savings.boxes.find((b) => b.id === id) ?? k.fail("Cofrinho n\xE3o encontrado.");
+}
+function boxUpsert(k, { box }) {
+  const name = (box.name ?? "").trim();
+  if (!name) k.fail("D\xEA um nome para o cofrinho.");
+  if (name.length > 40) k.fail("Nome do cofrinho: use no m\xE1ximo 40 caracteres.");
+  const target = box.targetAmount === null || box.targetAmount === void 0 ? null : Number(box.targetAmount);
+  if (target !== null && !(Number.isFinite(target) && target > 0)) k.fail("A meta do cofrinho precisa ser maior que zero.");
+  if (box.targetDate && !ISO.test(box.targetDate)) k.fail("Prazo inv\xE1lido.");
+  if (!["fixed", "percent", "none"].includes(box.ruleKind)) k.fail("Regra inv\xE1lida.");
+  const amount = Number(box.ruleAmount) || 0;
+  const pct = Number(box.rulePercent) || 0;
+  if (box.ruleKind === "fixed" && !(amount > 0)) k.fail("Informe quanto guardar por m\xEAs.");
+  if (box.ruleKind === "percent" && !(pct > 0 && pct <= 100)) k.fail("A porcentagem precisa estar entre 0 e 100.");
+  if (!MONTH.test(box.startMonth)) k.fail("M\xEAs de in\xEDcio inv\xE1lido.");
+  if (box.goalId && !k.d.goals.some((g) => g.id === box.goalId && g.status !== "archived")) k.fail("Meta n\xE3o encontrada.");
+  if (box.goalId && k.d.finance.savings.boxes.some((b) => b.goalId === box.goalId && b.id !== box.id)) k.fail("Essa meta j\xE1 est\xE1 ligada a outro cofrinho.");
+  const value = {
+    name,
+    description: (box.description ?? "").trim().slice(0, 300),
+    targetAmount: target,
+    targetDate: box.targetDate || null,
+    ruleKind: box.ruleKind,
+    ruleAmount: box.ruleKind === "fixed" ? round3(amount) : 0,
+    rulePercent: box.ruleKind === "percent" ? pct : 0,
+    startMonth: box.startMonth,
+    goalId: box.goalId || null
+  };
+  const existing = box.id ? k.d.finance.savings.boxes.find((b) => b.id === box.id) : void 0;
+  if (existing) {
+    Object.assign(existing, value);
+    k.log("financas", "savings", `Cofrinho atualizado: ${name}`, "");
+    syncGoal(k, existing);
+    return;
+  }
+  if (k.d.finance.savings.boxes.length >= MAX_BOXES) k.fail(`Limite de ${MAX_BOXES} cofrinhos.`);
+  k.d.finance.savings.boxes.push({ id: k.id(), ...value, status: "active", createdAt: k.at });
+  k.log("financas", "savings", `Cofrinho criado: ${name}`, "");
+}
+function boxSetStatus(k, { boxId, status }) {
+  const b = getBox(k, boxId);
+  if (status !== "active" && status !== "archived") k.fail("Situa\xE7\xE3o inv\xE1lida.");
+  b.status = status;
+}
+function boxRemove(k, { boxId }) {
+  const b = getBox(k, boxId);
+  if (k.d.finance.savings.moves.some((m) => m.boxId === b.id)) k.fail("Este cofrinho tem movimenta\xE7\xF5es: arquive em vez de excluir (o hist\xF3rico fica guardado).");
+  k.d.finance.savings.boxes = k.d.finance.savings.boxes.filter((x) => x.id !== b.id);
+}
+function assertNeverNegative(k, boxId) {
+  let bal = 0;
+  const moves = k.d.finance.savings.moves.filter((m) => m.boxId === boxId).sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
+  for (const m of moves) {
+    bal = round3(bal + m.amount);
+    if (bal < 0) k.fail("Retirada maior do que o saldo do cofrinho nessa data.");
+  }
+}
+function settleMonth(k, box, month) {
+  const quota = monthQuota(k.d, box, month).amount;
+  const met = quota > 0 && depositedInMonth(k.d, box.id, month) >= quota;
+  k.setSourceXp("savings_month", `${box.id}:${month}`, met ? XP_RULES.savingsMonthMet : 0, `Cofrinho em dia: ${box.name} (${month})`);
+}
+function syncGoal(k, box) {
+  if (!box.goalId) return;
+  const goal = k.d.goals.find((g) => g.id === box.goalId);
+  if (!goal || goal.status === "archived" || goal.status === "completed" || goal.metricSource !== "manual") return;
+  const value = boxBalance(k.d, box.id, k.today);
+  if (goal.currentValue === value) return;
+  goalObserve(k, { type: "goal/observe", goalId: goal.id, value, date: k.today, note: `Saldo do cofrinho ${box.name}` });
+}
+function moveUpsert(k, { move }) {
+  const box = getBox(k, move.boxId);
+  const amount = round3(Number(move.amount));
+  if (!Number.isFinite(amount) || amount === 0) k.fail("Informe um valor diferente de zero.");
+  if (Math.abs(amount) > 1e9) k.fail("Valor alto demais.");
+  if (!ISO.test(move.date)) k.fail("Data inv\xE1lida.");
+  if (move.date > k.today) k.fail("N\xE3o d\xE1 para registrar uma movimenta\xE7\xE3o no futuro.");
+  const note = (move.note ?? "").trim().slice(0, 300);
+  const existing = move.id ? k.d.finance.savings.moves.find((m) => m.id === move.id) : void 0;
+  const months = /* @__PURE__ */ new Set([monthKey(move.date)]);
+  if (existing) {
+    if (existing.boxId !== box.id) k.fail("Uma movimenta\xE7\xE3o n\xE3o muda de cofrinho.");
+    if (box.status !== "active" && existing.amount !== amount) k.fail("Cofrinho arquivado.");
+    months.add(monthKey(existing.date));
+    Object.assign(existing, { date: move.date, amount, note });
+  } else {
+    if (box.status !== "active") k.fail("Cofrinho arquivado: reative para guardar dinheiro.");
+    k.d.finance.savings.moves.push({ id: k.id(), boxId: box.id, date: move.date, amount, note, createdAt: k.at });
+    k.log("financas", "savings", amount > 0 ? `Guardou no cofrinho ${box.name}` : `Retirou do cofrinho ${box.name}`, `R$ ${Math.abs(amount).toFixed(2).replace(".", ",")}`);
+  }
+  assertNeverNegative(k, box.id);
+  for (const m of months) settleMonth(k, box, m);
+  syncGoal(k, box);
+}
+function moveRemove(k, { moveId }) {
+  const m = k.d.finance.savings.moves.find((x) => x.id === moveId) ?? k.fail("Movimenta\xE7\xE3o n\xE3o encontrada.");
+  const box = getBox(k, m.boxId);
+  k.d.finance.savings.moves = k.d.finance.savings.moves.filter((x) => x.id !== moveId);
+  assertNeverNegative(k, box.id);
+  settleMonth(k, box, monthKey(m.date));
+  syncGoal(k, box);
+}
+
 // src/domain/engine/index.ts
 function execute(state, command, ctx) {
   const draft = structuredClone(state);
@@ -1294,6 +1492,20 @@ function dispatch(k, c) {
       return categoryAdd(k, c);
     case "budget/set":
       return budgetSet(k, c);
+    case "savings/box/upsert":
+      return boxUpsert(k, c);
+    case "savings/box/setStatus":
+      return boxSetStatus(k, c);
+    case "savings/box/remove":
+      return boxRemove(k, c);
+    case "savings/move/upsert":
+      return moveUpsert(k, c);
+    case "savings/move/remove":
+      return moveRemove(k, c);
+    case "review/period/save":
+      return periodReviewSave(k, c);
+    case "review/period/remove":
+      return periodReviewRemove(k, c);
     case "rel/upsert":
       return relUpsert(k, c);
     case "rel/remove":
@@ -1365,10 +1577,12 @@ function createEmptyState(now, opts = {}) {
       accounts: [{ id: "acc-principal", name: "Conta principal", type: "corrente", openingBalance: 0 }],
       categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })),
       transactions: [],
-      budgets: []
+      budgets: [],
+      savings: { boxes: [], moves: [] }
     },
     relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], sections: [], entries: [], privateDetails: [] },
     reviews: [],
+    periodReviews: [],
     imports: [],
     activity: []
   };
@@ -1385,7 +1599,7 @@ function migrateState(raw, now) {
     profile: { ...base.profile, ...r.profile },
     settings: { ...base.settings, ...r.settings },
     equipped: { ...base.equipped, ...r.equipped },
-    finance: { ...base.finance, ...r.finance },
+    finance: { ...base.finance, ...r.finance, savings: { ...base.finance.savings, ...r.finance?.savings } },
     relationship: { ...base.relationship, ...r.relationship },
     schemaVersion: SCHEMA_VERSION
   };

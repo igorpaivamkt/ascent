@@ -14,6 +14,8 @@ export const XP_RULES = {
   resultRecorded: 15,
   relExperience: 10,
   relCommitmentDone: 10,
+  /** Cofrinho em dia no mês (guardou pelo menos o valor da regra). Uma vez por cofrinho por mês. */
+  savingsMonthMet: 15,
 } as const;
 
 export const COIN_RULES = {

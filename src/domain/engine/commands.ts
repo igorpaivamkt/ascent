@@ -1,6 +1,6 @@
 import type {
   Account, AppState, Direction, Frequency, Goal, GoalCategory, IncomeClass, IndicatorKind, ISODate, MetricSource, MilestoneRule,
-  MissReason, OccurrenceStatus, Settings, Slot, TxStatus, TxType,
+  MissReason, OccurrenceStatus, SavingsRuleKind, Settings, Slot, TxStatus, TxType,
 } from '../types';
 
 export interface MilestoneDraft {
@@ -39,6 +39,27 @@ export interface HabitDraft {
   durationMin: number;
   goalId: string | null;
   startDate?: ISODate;
+}
+
+export interface SavingsBoxDraft {
+  id?: string;
+  name: string;
+  description: string;
+  targetAmount: number | null;
+  targetDate: ISODate | null;
+  ruleKind: SavingsRuleKind;
+  ruleAmount: number;
+  rulePercent: number;
+  startMonth: string;
+  goalId: string | null;
+}
+
+export interface SavingsMoveDraft {
+  id?: string;
+  boxId: string;
+  date: ISODate;
+  amount: number;
+  note: string;
 }
 
 export interface TxDraft {
@@ -101,12 +122,19 @@ export type Command =
   | { type: 'account/upsert'; account: Omit<Account, 'id'> & { id?: string } }
   | { type: 'category/add'; name: string; kind: TxType }
   | { type: 'budget/set'; categoryId: string; month: string; amount: number }
+  | { type: 'savings/box/upsert'; box: SavingsBoxDraft }
+  | { type: 'savings/box/setStatus'; boxId: string; status: 'active' | 'archived' }
+  | { type: 'savings/box/remove'; boxId: string }
+  | { type: 'savings/move/upsert'; move: SavingsMoveDraft }
+  | { type: 'savings/move/remove'; moveId: string }
   | { [K in RelEntity]: { type: 'rel/upsert'; entity: K; value: RelValue<K> } }[RelEntity]
   | { type: 'rel/remove'; entity: RelEntity; id: string }
   | { type: 'rel/toggle'; entity: 'wishes' | 'commitments'; id: string }
   | { type: 'rel/private/set'; profileId: string; address: string; postalCode: string }
   | { type: 'rel/private/clear'; profileId: string }
   | { type: 'review/save'; weekStart: ISODate; highlights: string; obstacles: string; priorities: string }
+  | { type: 'review/period/save'; id?: string; from: ISODate; to: ISODate; title: string; highlights: string; obstacles: string; priorities: string }
+  | { type: 'review/period/remove'; id: string }
   | { type: 'shop/buy'; itemId: string }
   | { type: 'shop/equip'; itemId: string }
   | { type: 'shop/unequip'; slot: Slot }

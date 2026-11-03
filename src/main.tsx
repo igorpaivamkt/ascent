@@ -11,6 +11,7 @@ import './styles/base.css';
 import './styles/components.css';
 import './styles/mountain.css';
 import './styles/pages.css';
+import './styles/report.css';
 
 /** Usa o localStorage quando disponível; caso contrário (modo privado restrito, prévias), cai para memória. */
 function pickStorage(): { storage: KeyValueStorage; persistent: boolean } {

@@ -5,6 +5,7 @@ import * as G from './goalHandlers';
 import { Kernel, type EngineContext } from './kernel';
 import * as O from './otherHandlers';
 import * as R from './routineHandlers';
+import * as S from './savingsHandlers';
 
 export * from './commands';
 export type { EngineContext } from './kernel';
@@ -85,6 +86,13 @@ function dispatch(k: Kernel, c: Command): void {
     case 'account/upsert': return O.accountUpsert(k, c);
     case 'category/add': return O.categoryAdd(k, c);
     case 'budget/set': return O.budgetSet(k, c);
+    case 'savings/box/upsert': return S.boxUpsert(k, c);
+    case 'savings/box/setStatus': return S.boxSetStatus(k, c);
+    case 'savings/box/remove': return S.boxRemove(k, c);
+    case 'savings/move/upsert': return S.moveUpsert(k, c);
+    case 'savings/move/remove': return S.moveRemove(k, c);
+    case 'review/period/save': return O.periodReviewSave(k, c);
+    case 'review/period/remove': return O.periodReviewRemove(k, c);
     case 'rel/upsert': return O.relUpsert(k, c);
     case 'rel/remove': return O.relRemove(k, c);
     case 'rel/toggle': return O.relToggle(k, c);
