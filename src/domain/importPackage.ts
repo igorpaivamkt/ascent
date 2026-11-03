@@ -34,6 +34,8 @@ export const IMPORT_TARGETS = {
   'rel.commitments': (s: AppState) => s.relationship.commitments,
   'savings.boxes': (s: AppState) => s.finance.savings.boxes,
   'savings.moves': (s: AppState) => s.finance.savings.moves,
+  'reading.books': (s: AppState) => s.reading.books,
+  'reading.logs': (s: AppState) => s.reading.logs,
 } satisfies Record<string, (s: AppState) => { id: string }[]>;
 export type ImportTarget = keyof typeof IMPORT_TARGETS;
 
@@ -156,6 +158,7 @@ function keyOfItem(target: ImportTarget, item: Record<string, unknown>): string 
     case 'rel.entries': return `${String(item.profileId)}|${String(item.sectionId)}|${norm(item.label || item.value)}`;
     case 'rel.wishes': return `${String(item.profileId)}|${norm(item.title)}`;
     case 'savings.boxes': return norm(item.name);
+    case 'reading.books': return norm(item.title);
     default: return null;
   }
 }
@@ -168,6 +171,7 @@ function keyOfCommand(target: ImportTarget, c: Command): string | null {
     case 'account/upsert': return target === 'accounts' ? keyOfItem(target, c.account as unknown as Record<string, unknown>) : null;
     case 'project/add': return target === 'projects' ? keyOfItem(target, { goalId: c.goalId, title: c.title }) : null;
     case 'savings/box/upsert': return target === 'savings.boxes' ? keyOfItem(target, c.box as unknown as Record<string, unknown>) : null;
+    case 'reading/book/upsert': return target === 'reading.books' ? keyOfItem(target, c.book as unknown as Record<string, unknown>) : null;
     case 'rel/upsert': return target.startsWith('rel.') && (x as unknown as { value: Record<string, unknown> }).value ? keyOfItem(target, (c as { value: Record<string, unknown> }).value) : null;
     default: return null;
   }

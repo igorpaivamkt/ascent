@@ -16,6 +16,8 @@ export const XP_RULES = {
   relCommitmentDone: 10,
   /** Cofrinho em dia no mês (guardou pelo menos o valor da regra). Uma vez por cofrinho por mês. */
   savingsMonthMet: 15,
+  /** Livro concluído (uma vez por livro; desfeito se for reaberto). */
+  bookFinished: 60,
 } as const;
 
 export const COIN_RULES = {
@@ -24,6 +26,7 @@ export const COIN_RULES = {
   goalCompleted: 100,
   weeklyReview: 15,
   perLevelUp: 25,
+  bookFinished: 30,
 } as const;
 
 /** Regra matemática de avanço visual na montanha (ver docs/REGRAS.md). */
@@ -56,6 +59,17 @@ export const TITLES: TitleDef[] = [
   { id: 't-consistente', name: 'Consistente por 30 dias', achievement: 'streak_30' },
   { id: 't-primeiro-projeto', name: 'Primeiro Projeto Concluído', achievement: 'first_mission' },
   { id: 't-cume', name: 'Conquistador de Cumes', achievement: 'first_summit' },
+  { id: 't-leitor', name: 'Leitor', achievement: 'book_1' },
+  { id: 't-devorador', name: 'Devorador de Livros', achievement: 'book_5' },
+  { id: 't-rato-biblioteca', name: 'Rato de Biblioteca', achievement: 'read_1000' },
+  { id: 't-executor', name: 'Executor', achievement: 'tasks_50' },
+  { id: 't-implacavel', name: 'Implacável', achievement: 'tasks_100' },
+  { id: 't-pontual', name: 'Pontual', achievement: 'tasks_on_time_25' },
+  { id: 't-fiel-agenda', name: 'Fiel à Agenda', achievement: 'clean_week' },
+  { id: 't-palavra-honra', name: 'Palavra de Honra', achievement: 'clean_week_4' },
+  { id: 't-atleta', name: 'Atleta da Rotina', achievement: 'health_50' },
+  { id: 't-estudioso', name: 'Estudioso', achievement: 'study_50' },
+  { id: 't-poupador', name: 'Poupador', achievement: 'savings_3' },
 ];
 
 export const DEFAULT_COIN_NAME = 'ASCENT Coins';

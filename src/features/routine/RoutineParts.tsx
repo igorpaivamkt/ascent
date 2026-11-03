@@ -4,6 +4,8 @@ import { useAppState, useDispatch } from '../../app/store';
 import { addDays, formatDate, WEEKDAY_SHORT } from '../../domain/dates';
 import type { HabitDraft } from '../../domain/engine';
 import { dayAgenda, MISS_REASONS, STATUS_LABEL, type AgendaItem } from '../../domain/routine';
+import { CATEGORY_SUGGESTIONS, FAMILY_LABEL, familyOf, isPagesUnit, occurrenceQuantity } from '../../domain/reading';
+import { parseNumber } from '../../utils/format';
 import type { Frequency, Habit, ISODate, MissReason, OccurrenceStatus, Task } from '../../domain/types';
 import { Field, Modal, Segmented } from '../../components/ui';
 import { useToday } from '../../hooks/useGame';
@@ -45,6 +47,7 @@ export function AgendaList({ date, compact, onOpen, show = () => true }: { date:
                 <div className="list__meta">
                   {item.habit.timeWindow && <span>{item.habit.timeWindow}</span>}
                   {item.habit.durationMin > 0 && <span>{item.habit.durationMin} min</span>}
+                  {(item.habit.target ?? 0) > 0 && <span className="strong">{item.occurrence && (item.status === 'done' || item.status === 'partial') ? occurrenceQuantity(item.occurrence, item.habit) : item.habit.target} {item.habit.unit}</span>}
                   {goal && <span className="row" style={{ gap: 3 }}><LuTarget aria-hidden="true" /> {goal.title}</span>}
                   {item.rescheduledFrom && <span>Reagendado de {formatDate(item.rescheduledFrom)}</span>}
                   {item.status !== 'pending' && item.status !== 'done' && <span className="strong">{STATUS_LABEL[item.status]}</span>}
@@ -93,8 +96,10 @@ export function OccurrenceSheet({ item, onClose }: { item: AgendaItem | null; on
   const [note, setNote] = useState('');
   const [duration, setDuration] = useState('');
   const [to, setTo] = useState('');
+  const [qty, setQty] = useState('');
   useEffect(() => {
     if (!item) return;
+    setQty(item.habit.target ? String(item.occurrence ? occurrenceQuantity({ ...item.occurrence, status: 'done' }, item.habit) : item.habit.target) : '');
     setStatus(item.status === 'pending' ? 'done' : item.status);
     setReason(item.occurrence?.reason ?? '');
     setNote(item.occurrence?.note ?? '');
@@ -114,6 +119,7 @@ export function OccurrenceSheet({ item, onClose }: { item: AgendaItem | null; on
     const ok = await dispatch({
       type: 'occurrence/set', occurrenceId: item.occurrenceId, status, reason: needsReason ? (reason || null) : null, note,
       durationMin: status === 'done' || status === 'partial' ? Number(duration) || null : null, rescheduleTo: status === 'rescheduled' ? to : null,
+      ...(item.habit.target && (status === 'done' || status === 'partial') ? { quantity: qty.trim() ? parseNumber(qty) : null } : {}),
     });
     if (ok) onClose();
   };
@@ -136,6 +142,11 @@ export function OccurrenceSheet({ item, onClose }: { item: AgendaItem | null; on
         {status === 'rescheduled' && (
           <Field label="Nova data"><input className="input" type="date" value={to} min={addDays(item.date, 1)} onChange={(e) => setTo(e.target.value)} /></Field>
         )}
+        {(status === 'done' || status === 'partial') && (item.habit.target ?? 0) > 0 && (
+          <Field label={`Quanto você fez (${item.habit.unit || 'quantidade'})`} hint={`Meta: ${item.habit.target} ${item.habit.unit ?? ''}.`}>
+            <input className="input" inputMode="decimal" value={qty} onChange={(e) => setQty(e.target.value.replace(/[^\d,.]/g, ''))} />
+          </Field>
+        )}
         {(status === 'done' || status === 'partial') && (
           <Field label="Duração real (min)"><input className="input" inputMode="numeric" value={duration} onChange={(e) => setDuration(e.target.value.replace(/\D/g, ''))} /></Field>
         )}
@@ -151,16 +162,19 @@ const FREQ: { value: Frequency; label: string }[] = [
   { value: 'custom', label: 'Dias específicos' },
 ];
 
-export function HabitForm({ open, onClose, habit }: { open: boolean; onClose: () => void; habit?: Habit | null }) {
+export function HabitForm({ open, onClose, habit, preset }: { open: boolean; onClose: () => void; habit?: Habit | null; preset?: 'leitura' }) {
   const state = useAppState();
   const dispatch = useDispatch();
-  const blank: HabitDraft = { title: '', description: '', category: 'geral', frequency: 'daily', days: [], timeWindow: '', durationMin: 15, goalId: null };
+  const blank: HabitDraft = preset === 'leitura'
+    ? { title: 'Ler 10 páginas', description: '', category: 'Leitura', frequency: 'daily', days: [], timeWindow: '', durationMin: 20, goalId: null, target: 10, unit: 'páginas' }
+    : { title: '', description: '', category: 'geral', frequency: 'daily', days: [], timeWindow: '', durationMin: 15, goalId: null, target: null, unit: '' };
   const [d, setD] = useState<HabitDraft>(blank);
   useEffect(() => {
-    if (open) setD(habit ? { ...habit } : { ...blank, goalId: state.goals.find((g) => g.isPriority && g.status === 'active')?.id ?? null });
+    if (open) setD(habit ? { ...habit, target: habit.target ?? null, unit: habit.unit ?? '' } : { ...blank, goalId: preset === 'leitura' ? null : state.goals.find((g) => g.isPriority && g.status === 'active')?.id ?? null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, habit]);
   const up = (patch: Partial<HabitDraft>) => setD((x) => ({ ...x, ...patch }));
+  const family = familyOf({ category: d.category, title: d.title });
   const save = async () => {
     const ok = await dispatch(habit ? { type: 'habit/update', habitId: habit.id, patch: d } : { type: 'habit/create', habit: d });
     if (ok) onClose();
@@ -188,7 +202,10 @@ export function HabitForm({ open, onClose, habit }: { open: boolean; onClose: ()
           <Field label="Duração (min)"><input className="input" inputMode="numeric" value={String(d.durationMin)} onChange={(e) => up({ durationMin: Number(e.target.value.replace(/\D/g, '')) || 0 })} /></Field>
         </div>
         <div className="form-row">
-          <Field label="Categoria"><input className="input" value={d.category} onChange={(e) => up({ category: e.target.value })} /></Field>
+          <Field label="Categoria" hint={family !== 'outros' ? `Reconhecida como ${FAMILY_LABEL[family]}: conta para as conquistas de ${FAMILY_LABEL[family].toLowerCase()}.` : 'Ex.: Leitura, Saúde, Estudos, Finanças, Mente.'}>
+            <input className="input" list="habit-categories" value={d.category} onChange={(e) => up({ category: e.target.value, ...(familyOf({ category: e.target.value, title: d.title }) === 'leitura' && !d.unit ? { unit: 'páginas' } : {}) })} />
+            <datalist id="habit-categories">{CATEGORY_SUGGESTIONS.map((c) => <option key={c} value={c} />)}</datalist>
+          </Field>
           <Field label="Objetivo relacionado" hint="Sem objetivo, o avanço vai para a jornada prioritária.">
             <select className="select" value={d.goalId ?? ''} onChange={(e) => up({ goalId: e.target.value || null })}>
               <option value="">Nenhum</option>
@@ -196,6 +213,16 @@ export function HabitForm({ open, onClose, habit }: { open: boolean; onClose: ()
             </select>
           </Field>
         </div>
+        <div className="form-row">
+          <Field label="Meta por vez (opcional)" hint={family === 'leitura' ? 'Ex.: 10 páginas. Cada dia concluído soma no livro atual.' : 'Ex.: 5 km, 30 minutos, 2 litros.'}>
+            <input className="input" inputMode="decimal" value={d.target ? String(d.target).replace('.', ',') : ''} onChange={(e) => up({ target: parseNumber(e.target.value) || null })} placeholder="Ex.: 10" />
+          </Field>
+          <Field label="Unidade">
+            <input className="input" list="habit-units" value={d.unit ?? ''} onChange={(e) => up({ unit: e.target.value })} placeholder="páginas" />
+            <datalist id="habit-units">{['páginas', 'minutos', 'km', 'repetições', 'litros', 'capítulos'].map((u) => <option key={u} value={u} />)}</datalist>
+          </Field>
+        </div>
+        {family === 'leitura' && !isPagesUnit(d.unit) && (d.target ?? 0) > 0 && <p className="note small">Para contar páginas e livros, use a unidade “páginas”.</p>}
         <Field label="Descrição"><textarea className="textarea" value={d.description} onChange={(e) => up({ description: e.target.value })} placeholder="Opcional" /></Field>
       </div>
     </Modal>

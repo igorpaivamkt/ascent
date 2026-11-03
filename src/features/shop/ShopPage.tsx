@@ -7,6 +7,7 @@ import { Tabs } from '../../components/ui';
 import { useGame } from '../../hooks/useGame';
 import { integer } from '../../utils/format';
 import { CharacterPreview } from '../mountain/CharacterPreview';
+import { ScenePreview } from '../mountain/ScenePreview';
 
 function unlockLabel(item: CosmeticItem, coinName: string): string {
   const u = item.unlock;
@@ -47,8 +48,9 @@ export function ShopPage() {
               const on = state.equipped[i.slot] === i.id;
               return (
                 <div key={i.id} className={`item ${selected === i.id ? 'is-selected' : ''} ${on ? 'is-equipped' : ''}`}>
-                  <CharacterPreview look={{ ...state.equipped, [i.slot]: i.id }} size={84} animate={false} />
+                  {i.slot === 'scene' ? <div className="item__scene"><ScenePreview id={i.id} /></div> : <CharacterPreview look={{ ...state.equipped, [i.slot]: i.id }} size={84} animate={false} />}
                   <h3>{i.name}</h3>
+                  {i.collection && <span className="item__collection">{i.collection}</span>}
                   <small>{has ? (on ? 'Equipado' : 'No inventário') : <>{i.unlock.type !== 'coins' && <LuLock aria-hidden="true" style={{ display: 'inline', width: 12, height: 12, verticalAlign: -2 }} />} {unlockLabel(i, g.coinName)}</>}</small>
                   <button type="button" className="item__select" aria-label={`Ver ${i.name}`} aria-pressed={selected === i.id} onClick={() => setSelected(i.id)} />
                 </div>
@@ -58,10 +60,15 @@ export function ShopPage() {
         </div>
         <aside className="card shop__preview" aria-labelledby="prev-h">
           <div className="card__head"><h2 id="prev-h">Prévia</h2></div>
-          <div className="stage">
-            <CharacterPreview look={preview} mode={item.slot === 'fx' ? 'celebrate' : 'walk'} size={170} label={`Prévia do personagem com ${item.name}`} />
-          </div>
+          {item.slot === 'scene' ? (
+            <div className="stage stage--scene"><ScenePreview id={item.id} label={`Prévia do cenário ${item.name}`} /></div>
+          ) : (
+            <div className="stage">
+              <CharacterPreview look={preview} mode={item.slot === 'fx' ? 'celebrate' : 'walk'} size={170} label={`Prévia do personagem com ${item.name}`} />
+            </div>
+          )}
           <h3 style={{ marginTop: 14, fontSize: 'var(--t-xl)' }}>{item.name}</h3>
+          {item.collection && <p className="xs muted strong" style={{ margin: '2px 0 0' }}>Coleção {item.collection}</p>}
           <p className="muted small" style={{ margin: '4px 0 12px' }}>{item.description}</p>
           <p className="small strong" style={{ marginBottom: 12 }}>{owned ? 'Você possui este item' : unlockLabel(item, g.coinName)}</p>
           <div className="stack" style={{ gap: 8 }}>

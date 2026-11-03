@@ -6,7 +6,7 @@ import type { Goal } from '../../domain/types';
 import { useReducedMotion } from '../../hooks/usePreferences';
 import { metric } from '../../utils/format';
 import { poseFor, STATIC_POSE, type CharMode } from './rig';
-import { Scenery } from './Scenery';
+import { Scenery, sceneClass } from './Scenery';
 import { applyPose, Stickman, type RigEls } from './Stickman';
 
 const CHAR_SCALE = 1.18;
@@ -223,10 +223,10 @@ export function Mountain({ goal, variant = 'hero', title }: Props) {
     : 'Montanha sem jornada definida.';
 
   return (
-    <div ref={wrapRef} className={`mountain mountain--${variant}`}>
+    <div ref={wrapRef} className={`mountain mountain--${variant} ${sceneClass(state.equipped.scene)}`}>
       {title && <h2 className="sr-only">{title}</h2>}
       <svg ref={svgRef} className="mountain__svg" viewBox={`0 0 ${WORLD.width} ${WORLD.height}`} preserveAspectRatio="xMidYMid slice" role="img" aria-label={label}>
-        <Scenery />
+        <Scenery theme={state.equipped.scene} />
         <path d={TRAIL_D} className="trail trail--shadow" />
         <path d={TRAIL_D} className="trail trail--pending" />
         <path ref={doneRef} d={TRAIL_D} className="trail trail--done" pathLength={1000} strokeDasharray="0 1000" />

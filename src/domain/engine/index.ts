@@ -6,6 +6,7 @@ import { Kernel, type EngineContext } from './kernel';
 import * as O from './otherHandlers';
 import * as R from './routineHandlers';
 import * as S from './savingsHandlers';
+import * as B from './readingHandlers';
 
 export * from './commands';
 export type { EngineContext } from './kernel';
@@ -86,6 +87,11 @@ function dispatch(k: Kernel, c: Command): void {
     case 'account/upsert': return O.accountUpsert(k, c);
     case 'category/add': return O.categoryAdd(k, c);
     case 'budget/set': return O.budgetSet(k, c);
+    case 'reading/book/upsert': return B.bookUpsert(k, c);
+    case 'reading/book/setStatus': return B.bookSetStatus(k, c);
+    case 'reading/book/remove': return B.bookRemove(k, c);
+    case 'reading/log/upsert': return B.logUpsert(k, c);
+    case 'reading/log/remove': return B.logRemove(k, c);
     case 'savings/box/upsert': return S.boxUpsert(k, c);
     case 'savings/box/setStatus': return S.boxSetStatus(k, c);
     case 'savings/box/remove': return S.boxRemove(k, c);

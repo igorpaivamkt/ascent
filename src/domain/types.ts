@@ -138,6 +138,9 @@ export interface Habit {
   status: 'active' | 'paused' | 'archived';
   startDate: ISODate;
   createdAt: ISODateTime;
+  /** Meta por vez (opcional), ex.: 10 páginas, 5 km. Em hábitos de leitura com "páginas", alimenta o livro atual. */
+  target?: number | null;
+  unit?: string;
 }
 
 export interface Occurrence {
@@ -152,6 +155,10 @@ export interface Occurrence {
   rescheduledTo: ISODate | null;
   rescheduledFrom: ISODate | null;
   updatedAt: ISODateTime;
+  /** Quanto foi feito (ex.: páginas lidas). Sem valor, vale a meta do hábito. */
+  quantity?: number | null;
+  /** Livro que recebeu as páginas desta ocorrência (definido ao registrar). */
+  bookId?: ID | null;
 }
 
 export interface Task {
@@ -209,7 +216,7 @@ export interface ProgressEvent {
   at: ISODateTime;
 }
 
-export type Slot = 'body' | 'outfit' | 'pack' | 'head' | 'hand' | 'fx';
+export type Slot = 'body' | 'outfit' | 'pack' | 'head' | 'hand' | 'fx' | 'scene';
 export interface InventoryItem {
   itemId: string;
   acquiredAt: ISODateTime;
@@ -390,6 +397,32 @@ export interface RelPrivate {
   updatedAt: ISODateTime;
 }
 
+// ───────────────────────── Leitura
+export type BookStatus = 'reading' | 'paused' | 'finished' | 'abandoned';
+export interface Book {
+  id: ID;
+  title: string;
+  author: string;
+  totalPages: number;
+  startDate: ISODate;
+  /** Prazo para terminar (opcional): permite calcular quantas páginas por dia. */
+  targetDate: ISODate | null;
+  status: BookStatus;
+  finishedAt: ISODate | null;
+  /** Objetivo manual que acompanha este livro (páginas lidas, ou 1 quando for sim/não). */
+  goalId: ID | null;
+  createdAt: ISODateTime;
+}
+/** Leitura avulsa (fora do hábito): páginas lidas num dia. */
+export interface ReadingLog {
+  id: ID;
+  bookId: ID;
+  date: ISODate;
+  pages: number;
+  note: string;
+  createdAt: ISODateTime;
+}
+
 // ───────────────────────── Revisões e histórico
 /** Revisão livre de qualquer período (mês, trimestre, de/até). A semanal continua em `reviews`. */
 export interface PeriodReview {
@@ -457,6 +490,7 @@ export interface AppState {
   inventory: InventoryItem[];
   equipped: Equipped;
   finance: { accounts: Account[]; categories: Category[]; transactions: Transaction[]; budgets: Budget[]; savings: { boxes: SavingsBox[]; moves: SavingsMove[] } };
+  reading: { books: Book[]; logs: ReadingLog[] };
   relationship: {
     profiles: RelProfile[];
     preferences: RelPreference[];

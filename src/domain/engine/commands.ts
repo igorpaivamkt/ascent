@@ -1,5 +1,5 @@
 import type {
-  Account, AppState, Direction, Frequency, Goal, GoalCategory, IncomeClass, IndicatorKind, ISODate, MetricSource, MilestoneRule,
+  Account, AppState, BookStatus, Direction, Frequency, Goal, GoalCategory, IncomeClass, IndicatorKind, ISODate, MetricSource, MilestoneRule,
   MissReason, OccurrenceStatus, SavingsRuleKind, Settings, Slot, TxStatus, TxType,
 } from '../types';
 
@@ -39,6 +39,27 @@ export interface HabitDraft {
   durationMin: number;
   goalId: string | null;
   startDate?: ISODate;
+  /** Meta por vez (opcional), ex.: 10 páginas. */
+  target?: number | null;
+  unit?: string;
+}
+
+export interface BookDraft {
+  id?: string;
+  title: string;
+  author: string;
+  totalPages: number;
+  startDate: ISODate;
+  targetDate: ISODate | null;
+  goalId: string | null;
+}
+
+export interface ReadingLogDraft {
+  id?: string;
+  bookId: string;
+  date: ISODate;
+  pages: number;
+  note: string;
 }
 
 export interface SavingsBoxDraft {
@@ -112,6 +133,8 @@ export type Command =
       note?: string;
       durationMin?: number | null;
       rescheduleTo?: ISODate | null;
+      /** Quanto foi feito (ex.: páginas). Omitido: mantém o registrado, ou usa a meta do hábito. */
+      quantity?: number | null;
     }
   | { type: 'task/create'; title: string; date: ISODate; goalId: string | null; done?: boolean }
   | { type: 'task/toggle'; taskId: string }
@@ -122,6 +145,11 @@ export type Command =
   | { type: 'account/upsert'; account: Omit<Account, 'id'> & { id?: string } }
   | { type: 'category/add'; name: string; kind: TxType }
   | { type: 'budget/set'; categoryId: string; month: string; amount: number }
+  | { type: 'reading/book/upsert'; book: BookDraft }
+  | { type: 'reading/book/setStatus'; bookId: string; status: BookStatus; date?: ISODate }
+  | { type: 'reading/book/remove'; bookId: string }
+  | { type: 'reading/log/upsert'; log: ReadingLogDraft }
+  | { type: 'reading/log/remove'; logId: string }
   | { type: 'savings/box/upsert'; box: SavingsBoxDraft }
   | { type: 'savings/box/setStatus'; boxId: string; status: 'active' | 'archived' }
   | { type: 'savings/box/remove'; boxId: string }

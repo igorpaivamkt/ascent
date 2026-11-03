@@ -45,7 +45,9 @@ var IMPORT_TARGETS = {
   "rel.dates": (s) => s.relationship.dates,
   "rel.commitments": (s) => s.relationship.commitments,
   "savings.boxes": (s) => s.finance.savings.boxes,
-  "savings.moves": (s) => s.finance.savings.moves
+  "savings.moves": (s) => s.finance.savings.moves,
+  "reading.books": (s) => s.reading.books,
+  "reading.logs": (s) => s.reading.logs
 };
 var ID_RE = /^[A-Za-z0-9._:-]{1,80}$/;
 function isValidImportId(id) {
@@ -73,6 +75,8 @@ function keyOfItem(target, item) {
       return `${String(item.profileId)}|${norm(item.title)}`;
     case "savings.boxes":
       return norm(item.name);
+    case "reading.books":
+      return norm(item.title);
     default:
       return null;
   }
@@ -92,6 +96,8 @@ function keyOfCommand(target, c) {
       return target === "projects" ? keyOfItem(target, { goalId: c.goalId, title: c.title }) : null;
     case "savings/box/upsert":
       return target === "savings.boxes" ? keyOfItem(target, c.box) : null;
+    case "reading/book/upsert":
+      return target === "reading.books" ? keyOfItem(target, c.book) : null;
     case "rel/upsert":
       return target.startsWith("rel.") && x.value ? keyOfItem(target, c.value) : null;
     default:
@@ -120,14 +126,17 @@ var XP_RULES = {
   relExperience: 10,
   relCommitmentDone: 10,
   /** Cofrinho em dia no mês (guardou pelo menos o valor da regra). Uma vez por cofrinho por mês. */
-  savingsMonthMet: 15
+  savingsMonthMet: 15,
+  /** Livro concluído (uma vez por livro; desfeito se for reaberto). */
+  bookFinished: 60
 };
 var COIN_RULES = {
   missionDone: 30,
   milestoneReached: 50,
   goalCompleted: 100,
   weeklyReview: 15,
-  perLevelUp: 25
+  perLevelUp: 25,
+  bookFinished: 30
 };
 var MOUNTAIN_RULES = {
   /** Pontos de execução por origem. */
@@ -149,7 +158,18 @@ var TITLES = [
   { id: "t-ascendente", name: "Ascendente", level: 20 },
   { id: "t-consistente", name: "Consistente por 30 dias", achievement: "streak_30" },
   { id: "t-primeiro-projeto", name: "Primeiro Projeto Conclu\xEDdo", achievement: "first_mission" },
-  { id: "t-cume", name: "Conquistador de Cumes", achievement: "first_summit" }
+  { id: "t-cume", name: "Conquistador de Cumes", achievement: "first_summit" },
+  { id: "t-leitor", name: "Leitor", achievement: "book_1" },
+  { id: "t-devorador", name: "Devorador de Livros", achievement: "book_5" },
+  { id: "t-rato-biblioteca", name: "Rato de Biblioteca", achievement: "read_1000" },
+  { id: "t-executor", name: "Executor", achievement: "tasks_50" },
+  { id: "t-implacavel", name: "Implac\xE1vel", achievement: "tasks_100" },
+  { id: "t-pontual", name: "Pontual", achievement: "tasks_on_time_25" },
+  { id: "t-fiel-agenda", name: "Fiel \xE0 Agenda", achievement: "clean_week" },
+  { id: "t-palavra-honra", name: "Palavra de Honra", achievement: "clean_week_4" },
+  { id: "t-atleta", name: "Atleta da Rotina", achievement: "health_50" },
+  { id: "t-estudioso", name: "Estudioso", achievement: "study_50" },
+  { id: "t-poupador", name: "Poupador", achievement: "savings_3" }
 ];
 var DEFAULT_COIN_NAME = "ASCENT Coins";
 
@@ -512,13 +532,60 @@ var CATALOG = [
   // Efeitos de comemoração
   { id: "fx-sparks", name: "Fa\xEDscas", description: "Celebra\xE7\xE3o discreta.", slot: "fx", category: "efeito", unlock: { type: "default" } },
   { id: "fx-confetti", name: "Confete", description: "Celebra\xE7\xE3o com papel picado monocrom\xE1tico.", slot: "fx", category: "efeito", unlock: { type: "coins", price: 100 } },
-  { id: "fx-banner", name: "Estandarte", description: "Ergue um estandarte ao concluir uma miss\xE3o.", slot: "fx", category: "efeito", unlock: { type: "achievement", code: "first_mission" } }
+  { id: "fx-banner", name: "Estandarte", description: "Ergue um estandarte ao concluir uma miss\xE3o.", slot: "fx", category: "efeito", unlock: { type: "achievement", code: "first_mission" } },
+  // ── Coleção Leitor (conquistas de leitura)
+  { id: "head-glasses", name: "\xD3culos de leitura", description: "Para quem j\xE1 passou das cem p\xE1ginas.", slot: "head", category: "acessorio", collection: "Leitor", unlock: { type: "achievement", code: "read_100" } },
+  { id: "hand-book", name: "Livro aberto", description: "O primeiro livro conclu\xEDdo vai junto na subida.", slot: "hand", category: "acessorio", collection: "Leitor", unlock: { type: "achievement", code: "book_1" } },
+  { id: "outfit-cardigan", name: "Cardig\xE3 do leitor", description: "Conforto de biblioteca, para quem j\xE1 leu cinco livros.", slot: "outfit", category: "roupa", collection: "Leitor", unlock: { type: "achievement", code: "book_5" } },
+  { id: "fx-pages", name: "P\xE1ginas ao vento", description: "Folhas voando na comemora\xE7\xE3o. Doze livros lidos.", slot: "fx", category: "efeito", collection: "Leitor", unlock: { type: "achievement", code: "book_12" } },
+  // ── Coleção Herói (compromissos)
+  { id: "head-hero-mask", name: "M\xE1scara de her\xF3i", description: "Identidade secreta de quem cumpre o que promete. 50 tarefas.", slot: "head", category: "acessorio", collection: "Her\xF3i", unlock: { type: "achievement", code: "tasks_50" } },
+  { id: "outfit-hero-cape", name: "Capa heroica", description: "Capa vermelha com o emblema da montanha. 100 tarefas.", slot: "outfit", category: "roupa", collection: "Her\xF3i", unlock: { type: "achievement", code: "tasks_100" } },
+  { id: "head-halo", name: "Aur\xE9ola", description: "Quatro semanas sem deixar nada para tr\xE1s.", slot: "head", category: "acessorio", collection: "Her\xF3i", unlock: { type: "achievement", code: "clean_week_4" } },
+  { id: "fx-lightning", name: "Raios", description: "Energia de super-her\xF3i na comemora\xE7\xE3o.", slot: "fx", category: "efeito", collection: "Her\xF3i", unlock: { type: "coins", price: 260 } },
+  // ── Coleção Galáxia (ficção científica)
+  { id: "head-astronaut", name: "Capacete espacial", description: "Visor de astronauta para cumes fora da \xF3rbita.", slot: "head", category: "acessorio", collection: "Gal\xE1xia", unlock: { type: "coins", price: 450 } },
+  { id: "hand-plasma", name: "Espada de plasma", description: "L\xE2mina de energia de cavaleiro espacial.", slot: "hand", category: "acessorio", collection: "Gal\xE1xia", unlock: { type: "coins", price: 400 } },
+  { id: "pack-jetpack", name: "Mochila a jato", description: "Dois propulsores com chama acesa.", slot: "pack", category: "mochila", collection: "Gal\xE1xia", unlock: { type: "coins", price: 500 } },
+  { id: "body-robot", name: "Rob\xF4", description: "Cabe\xE7a quadrada, antena e olhos de LED.", slot: "body", category: "personagem", collection: "Gal\xE1xia", unlock: { type: "coins", price: 400 } },
+  { id: "fx-stars", name: "Chuva de estrelas", description: "Estrelas caindo em volta do personagem.", slot: "fx", category: "efeito", collection: "Gal\xE1xia", unlock: { type: "coins", price: 220 } },
+  // ── Coleção Fantasia
+  { id: "head-wizard", name: "Chap\xE9u de mago", description: "Pontudo, com estrelas bordadas.", slot: "head", category: "acessorio", collection: "Fantasia", unlock: { type: "coins", price: 300 } },
+  { id: "hand-staff", name: "Cajado do mago", description: "Cajado de madeira com uma esfera brilhante.", slot: "hand", category: "acessorio", collection: "Fantasia", unlock: { type: "coins", price: 280 } },
+  { id: "head-viking", name: "Elmo viking", description: "Chifres para enfrentar o frio do norte.", slot: "head", category: "acessorio", collection: "Fantasia", unlock: { type: "coins", price: 300 } },
+  // ── Coleção Aventura
+  { id: "head-pirate", name: "Chap\xE9u pirata", description: "Tric\xF3rnio com caveira e tapa-olho.", slot: "head", category: "acessorio", collection: "Aventura", unlock: { type: "coins", price: 250 } },
+  { id: "head-ninja", name: "Faixa ninja", description: "Faixa amarrada com as pontas ao vento.", slot: "head", category: "acessorio", collection: "Aventura", unlock: { type: "coins", price: 220 } },
+  { id: "hand-katana", name: "Katana", description: "L\xE2mina curva para cortar a procrastina\xE7\xE3o.", slot: "hand", category: "acessorio", collection: "Aventura", unlock: { type: "coins", price: 300 } },
+  { id: "head-detective", name: "Chap\xE9u de detetive", description: "Aba curta e fita escura, estilo noir.", slot: "head", category: "acessorio", collection: "Aventura", unlock: { type: "coins", price: 200 } },
+  { id: "hand-magnifier", name: "Lupa", description: "Para investigar onde a rotina falhou.", slot: "hand", category: "acessorio", collection: "Aventura", unlock: { type: "coins", price: 150 } },
+  // ── Coleção Geek
+  { id: "head-headset", name: "Fone gamer", description: "Headset com microfone. Partida rankeada da vida real.", slot: "head", category: "acessorio", collection: "Geek", unlock: { type: "coins", price: 180 } },
+  { id: "hand-controller", name: "Controle", description: "Controle de videogame na m\xE3o.", slot: "hand", category: "acessorio", collection: "Geek", unlock: { type: "coins", price: 200 } },
+  { id: "outfit-labcoat", name: "Jaleco de cientista", description: "Para experimentos de rotina.", slot: "outfit", category: "roupa", collection: "Geek", unlock: { type: "coins", price: 260 } },
+  { id: "body-neon", name: "Neon", description: "Tra\xE7o brilhante de fliperama.", slot: "body", category: "personagem", collection: "Geek", unlock: { type: "coins", price: 350 } },
+  // ── Conquistas de rotina
+  { id: "outfit-belt", name: "Faixa de lutador", description: "Faixa preta e gola de quimono. Cem h\xE1bitos de sa\xFAde.", slot: "outfit", category: "roupa", collection: "Atleta", unlock: { type: "achievement", code: "health_100" } },
+  { id: "head-grad", name: "Capelo", description: "Chap\xE9u de formatura. 50 h\xE1bitos de estudo.", slot: "head", category: "acessorio", collection: "Estudos", unlock: { type: "achievement", code: "study_50" } },
+  { id: "hand-coinbag", name: "Saco de moedas", description: "Tr\xEAs meses com o cofrinho em dia.", slot: "hand", category: "acessorio", collection: "Poupador", unlock: { type: "achievement", code: "savings_3" } },
+  { id: "fx-hearts", name: "Cora\xE7\xF5es", description: "Comemora\xE7\xE3o com cora\xE7\xF5es subindo.", slot: "fx", category: "efeito", unlock: { type: "coins", price: 150 } },
+  // ── Cenários da montanha
+  { id: "scene-classic", name: "Cl\xE1ssico", description: "Preto e branco, acompanha o tema do app.", slot: "scene", category: "cenario", unlock: { type: "default" } },
+  { id: "scene-sunset", name: "P\xF4r do sol", description: "C\xE9u laranja e montanhas em tons de vinho.", slot: "scene", category: "cenario", unlock: { type: "coins", price: 300 } },
+  { id: "scene-autumn", name: "Outono", description: "Encostas cor de ferrugem e c\xE9u dourado.", slot: "scene", category: "cenario", unlock: { type: "coins", price: 350 } },
+  { id: "scene-winter", name: "Inverno", description: "Tudo coberto de neve, com flocos caindo.", slot: "scene", category: "cenario", unlock: { type: "coins", price: 350 } },
+  { id: "scene-night", name: "Noite estrelada", description: "Lua cheia e estrelas piscando.", slot: "scene", category: "cenario", unlock: { type: "coins", price: 400 } },
+  { id: "scene-canyon", name: "C\xE2nion", description: "Rocha vermelha e sol de deserto.", slot: "scene", category: "cenario", unlock: { type: "coins", price: 450 } },
+  { id: "scene-volcano", name: "Vulc\xE3o", description: "Cume em brasa, fuma\xE7a e c\xE9u de cinzas.", slot: "scene", category: "cenario", unlock: { type: "coins", price: 600 } },
+  { id: "scene-synthwave", name: "Synthwave", description: "Sol listrado, grade neon e c\xE9u roxo de anos 80.", slot: "scene", category: "cenario", unlock: { type: "coins", price: 700 } },
+  { id: "scene-alien", name: "Planeta distante", description: "Montanhas violeta sob um planeta com an\xE9is.", slot: "scene", category: "cenario", unlock: { type: "coins", price: 800 } },
+  { id: "scene-aurora", name: "Aurora boreal", description: "Luzes verdes dan\xE7ando no c\xE9u. N\xEDvel 10.", slot: "scene", category: "cenario", unlock: { type: "level", level: 10 } }
 ];
-var DEFAULT_EQUIPPED = { body: "body-classic", outfit: null, pack: "pack-day", head: null, hand: null, fx: "fx-sparks" };
+var DEFAULT_EQUIPPED = { body: "body-classic", outfit: null, pack: "pack-day", head: null, hand: null, fx: "fx-sparks", scene: "scene-classic" };
 function getItem(id) {
   return CATALOG.find((i) => i.id === id);
 }
-var REQUIRED_SLOTS = ["body"];
+var REQUIRED_SLOTS = ["body", "scene"];
 
 // src/domain/levels.ts
 function xpForLevel(level) {
@@ -622,6 +689,120 @@ function streaks(state, today) {
   return { current, best: Math.max(best, current) };
 }
 
+// src/domain/reading.ts
+var norm2 = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+var FAMILY_WORDS = [
+  ["leitura", /\b(leitura|ler|livros?|lendo|leia)\b/],
+  ["saude", /\b(saude|exercicios?|treinos?|academia|musculacao|corrida|correr|jiu|jiu-jitsu|luta|esportes?|yoga|caminhada|caminhar|natacao|bike|pedal|alongamento|sono|dormir|alimentacao|dieta|agua)\b/],
+  ["estudos", /\b(estudos?|estudar|faculdade|curso|cursos|aula|aulas|idiomas?|ingles|espanhol|provas?|revisao de materia|concurso)\b/],
+  ["financas", /\b(financas|financeiro|dinheiro|orcamento|gastos?|poupanca|investimentos?)\b/],
+  ["mente", /\b(mente|meditacao|meditar|oracao|orar|espiritual|espiritualidade|gratidao|diario|terapia|respiracao)\b/]
+];
+var GENERIC = /* @__PURE__ */ new Set(["", "geral", "outros", "outro", "rotina"]);
+function familyOf(habit) {
+  const cat = norm2(habit.category ?? "");
+  for (const [fam, re] of FAMILY_WORDS) if (re.test(cat)) return fam;
+  if (GENERIC.has(cat)) {
+    const title = norm2(habit.title ?? "");
+    for (const [fam, re] of FAMILY_WORDS) if (re.test(title)) return fam;
+  }
+  return "outros";
+}
+var isPagesUnit = (unit) => /^p(a|á)g/i.test((unit ?? "").trim());
+function countsPages(h) {
+  return familyOf(h) === "leitura" && isPagesUnit(h.unit) && (h.target ?? 0) > 0;
+}
+function occurrenceQuantity(o, h) {
+  if (o.status !== "done" && o.status !== "partial") return 0;
+  if (typeof o.quantity === "number") return o.quantity;
+  const t = h.target ?? 0;
+  return o.status === "done" ? t : Math.floor(t / 2);
+}
+function currentBook(state) {
+  const reading = state.reading.books.filter((b) => b.status === "reading");
+  reading.sort((a, b) => b.startDate.localeCompare(a.startDate) || b.createdAt.localeCompare(a.createdAt));
+  return reading[0] ?? null;
+}
+function pageEntries(state) {
+  const habits = new Map(state.habits.map((h) => [h.id, h]));
+  const out = [];
+  for (const o of state.occurrences) {
+    const h = habits.get(o.habitId);
+    if (!h || !countsPages(h)) continue;
+    const pages = occurrenceQuantity(o, h);
+    if (pages > 0) out.push({ date: o.date, pages, bookId: o.bookId ?? null });
+  }
+  for (const l of state.reading.logs) out.push({ date: l.date, pages: l.pages, bookId: l.bookId });
+  return out;
+}
+function pagesRead(state, bookId) {
+  return pageEntries(state).filter((e) => bookId === void 0 || e.bookId === bookId).reduce((a, e) => a + e.pages, 0);
+}
+function daysBetween(a, b) {
+  return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 864e5);
+}
+function bookStatus(state, book, today) {
+  const read = Math.min(pagesRead(state, book.id), book.totalPages);
+  const left = Math.max(0, book.totalPages - read);
+  let perDay = null;
+  let daysLeft = null;
+  if (book.status === "reading" && book.targetDate && book.targetDate >= today) {
+    daysLeft = daysBetween(today, book.targetDate) + 1;
+    perDay = Math.ceil(left / daysLeft);
+  }
+  return {
+    book,
+    read,
+    left,
+    progress: book.totalPages > 0 ? read / book.totalPages : 0,
+    perDay,
+    daysLeft,
+    readyToFinish: book.status === "reading" && left === 0,
+    finishedOnTime: book.status === "finished" && !!book.finishedAt && !!book.targetDate && book.finishedAt <= book.targetDate
+  };
+}
+function readingStreak(state) {
+  const days = [...new Set(pageEntries(state).map((e) => e.date))].sort();
+  let best = 0;
+  let run = 0;
+  let prev = null;
+  for (const d of days) {
+    run = prev && addDays(prev, 1) === d ? run + 1 : 1;
+    best = Math.max(best, run);
+    prev = d;
+  }
+  return best;
+}
+function familyDone(state) {
+  const out = { leitura: 0, saude: 0, estudos: 0, financas: 0, mente: 0, outros: 0 };
+  const habits = new Map(state.habits.map((h) => [h.id, h]));
+  for (const o of state.occurrences) {
+    if (o.status !== "done") continue;
+    const h = habits.get(o.habitId);
+    if (h) out[familyOf(h)]++;
+  }
+  return out;
+}
+function tasksOnTime(state) {
+  const tz = state.settings.timezone;
+  return state.tasks.filter((t) => t.status === "done" && t.completedAt && toZonedISODate(new Date(t.completedAt), tz) <= t.date).length;
+}
+function cleanWeeks(state, today) {
+  const tz = state.settings.timezone;
+  const weeks = /* @__PURE__ */ new Map();
+  for (const t of state.tasks) {
+    const d = /* @__PURE__ */ new Date(`${t.date}T12:00:00Z`);
+    const monday = addDays(t.date, -((d.getUTCDay() + 6) % 7));
+    const w = weeks.get(monday) ?? { n: 0, ok: 0 };
+    w.n++;
+    if (t.status === "done" && t.completedAt && toZonedISODate(new Date(t.completedAt), tz) <= t.date) w.ok++;
+    weeks.set(monday, w);
+  }
+  let n = 0;
+  for (const [monday, w] of weeks) if (addDays(monday, 6) < today && w.n >= 5 && w.ok === w.n) n++;
+  return n;
+}
+
 // src/domain/achievements.ts
 function totalXp(state) {
   return state.xpEvents.reduce((a, e) => a + e.amount, 0);
@@ -650,6 +831,11 @@ function computeStats(state, today) {
     if (items.length >= 3 && items.every((i) => i.status === "done")) perfectDays++;
   }
   const defaults = new Set(CATALOG.filter((i) => i.unlock.type === "default").map((i) => i.id));
+  const fam = familyDone(state);
+  const books = state.reading.books.filter((b) => b.status === "finished");
+  const savingsNet = /* @__PURE__ */ new Map();
+  for (const e of state.xpEvents) if (e.sourceType === "savings_month") savingsNet.set(e.sourceId, (savingsNet.get(e.sourceId) ?? 0) + e.amount);
+  const sceneIds = new Set(CATALOG.filter((i) => i.slot === "scene" && i.unlock.type !== "default").map((i) => i.id));
   return {
     goalsCreated: state.goals.length,
     goalsWithResult: new Set(state.observations.filter((o) => o.source !== "baseline").map((o) => o.goalId)).size,
@@ -671,7 +857,21 @@ function computeStats(state, today) {
     relExperiences: state.relationship.experiences.length,
     relPreferences: state.relationship.preferences.length,
     itemsAcquired: state.inventory.filter((i) => !defaults.has(i.itemId)).length,
-    level: levelFromXp(totalXp(state))
+    level: levelFromXp(totalXp(state)),
+    pagesRead: pagesRead(state),
+    booksFinished: books.length,
+    booksOnTime: books.filter((b) => b.targetDate && b.finishedAt && b.finishedAt <= b.targetDate).length,
+    readingStreak: readingStreak(state),
+    healthDone: fam.saude,
+    studyDone: fam.estudos,
+    financeHabitDone: fam.financas,
+    mindDone: fam.mente,
+    tasksOnTime: tasksOnTime(state),
+    cleanWeeks: cleanWeeks(state, today),
+    relCommitmentsDone: state.relationship.commitments.filter((c) => c.status === "done").length,
+    savingsDeposits: state.finance.savings.moves.filter((m) => m.amount > 0).length,
+    savingsMonthsMet: [...savingsNet.values()].filter((v) => v > 0).length,
+    scenesOwned: state.inventory.filter((i) => sceneIds.has(i.itemId)).length
   };
 }
 var ACHIEVEMENTS = [
@@ -698,7 +898,40 @@ var ACHIEVEMENTS = [
   { code: "first_level_up", title: "Primeira subida de n\xEDvel", description: "Alcan\xE7ou o n\xEDvel 2.", category: "jogo", rarity: "comum", xp: 20, coins: 20, progress: (s) => [s.level, 2] },
   { code: "level_5", title: "Construtor de Rotina", description: "Alcan\xE7ou o n\xEDvel 5.", category: "jogo", rarity: "rara", xp: 50, coins: 50, progress: (s) => [s.level, 5] },
   { code: "conscious_replan", title: "Recome\xE7o consciente", description: "Revisou o plano de um objetivo sem apagar o hist\xF3rico.", category: "desenvolvimento", rarity: "rara", xp: 15, coins: 10, hidden: true, progress: (s) => [s.replans, 1] },
-  { code: "first_summit", title: "Cume", description: "Concluiu um objetivo validado pelo indicador.", category: "execucao", rarity: "lend\xE1ria", xp: 100, coins: 100, progress: (s) => [s.goalsCompleted, 1] }
+  { code: "first_summit", title: "Cume", description: "Concluiu um objetivo validado pelo indicador.", category: "execucao", rarity: "lend\xE1ria", xp: 100, coins: 100, progress: (s) => [s.goalsCompleted, 1] },
+  // Leitura: hábitos da categoria Leitura com meta em páginas + leituras avulsas + livros concluídos.
+  { code: "read_10", title: "Primeiras p\xE1ginas", description: "Leu 10 p\xE1ginas.", category: "leitura", rarity: "comum", xp: 10, coins: 5, progress: (s) => [s.pagesRead, 10] },
+  { code: "read_50", title: "Cinquenta p\xE1ginas", description: "Leu 50 p\xE1ginas.", category: "leitura", rarity: "comum", xp: 20, coins: 15, progress: (s) => [s.pagesRead, 50] },
+  { code: "read_100", title: "Cem p\xE1ginas", description: "Leu 100 p\xE1ginas. Ganha os \xF3culos de leitura.", category: "leitura", rarity: "rara", xp: 40, coins: 25, progress: (s) => [s.pagesRead, 100] },
+  { code: "read_500", title: "Quinhentas p\xE1ginas", description: "Leu 500 p\xE1ginas.", category: "leitura", rarity: "\xE9pica", xp: 100, coins: 60, progress: (s) => [s.pagesRead, 500] },
+  { code: "read_1000", title: "Mil p\xE1ginas", description: "Leu 1.000 p\xE1ginas. T\xEDtulo: Rato de Biblioteca.", category: "leitura", rarity: "lend\xE1ria", xp: 200, coins: 120, progress: (s) => [s.pagesRead, 1e3] },
+  { code: "book_1", title: "Primeiro livro", description: "Concluiu um livro. T\xEDtulo: Leitor e o livro na m\xE3o.", category: "leitura", rarity: "rara", xp: 60, coins: 40, progress: (s) => [s.booksFinished, 1] },
+  { code: "book_2", title: "Pr\xF3ximo cap\xEDtulo", description: "Concluiu o segundo livro.", category: "leitura", rarity: "rara", xp: 60, coins: 40, progress: (s) => [s.booksFinished, 2] },
+  { code: "book_5", title: "Estante de cinco", description: "Concluiu cinco livros. T\xEDtulo: Devorador de Livros e o cardig\xE3 do leitor.", category: "leitura", rarity: "\xE9pica", xp: 120, coins: 80, progress: (s) => [s.booksFinished, 5] },
+  { code: "book_12", title: "Um livro por m\xEAs", description: "Concluiu doze livros. Efeito: p\xE1ginas ao vento.", category: "leitura", rarity: "lend\xE1ria", xp: 250, coins: 150, progress: (s) => [s.booksFinished, 12] },
+  { code: "book_on_time", title: "No prazo", description: "Terminou um livro at\xE9 a data que voc\xEA definiu.", category: "leitura", rarity: "rara", xp: 40, coins: 30, progress: (s) => [s.booksOnTime, 1] },
+  { code: "read_streak_7", title: "Leitura di\xE1ria", description: "Leu em sete dias seguidos.", category: "leitura", rarity: "rara", xp: 50, coins: 30, progress: (s) => [s.readingStreak, 7] },
+  { code: "read_streak_30", title: "H\xE1bito de leitor", description: "Leu em trinta dias seguidos.", category: "leitura", rarity: "\xE9pica", xp: 150, coins: 100, progress: (s) => [s.readingStreak, 30] },
+  // Compromissos: tarefas cumpridas, no prazo e semanas sem pendências.
+  { code: "tasks_10", title: "Palavra cumprida", description: "Concluiu 10 tarefas.", category: "compromissos", rarity: "comum", xp: 20, coins: 15, progress: (s) => [s.tasksDone, 10] },
+  { code: "tasks_50", title: "Executor", description: "Concluiu 50 tarefas. T\xEDtulo: Executor e a m\xE1scara de her\xF3i.", category: "compromissos", rarity: "rara", xp: 60, coins: 40, progress: (s) => [s.tasksDone, 50] },
+  { code: "tasks_100", title: "Implac\xE1vel", description: "Concluiu 100 tarefas. T\xEDtulo: Implac\xE1vel e a capa heroica.", category: "compromissos", rarity: "\xE9pica", xp: 150, coins: 100, progress: (s) => [s.tasksDone, 100] },
+  { code: "tasks_on_time_25", title: "Pontual", description: "Concluiu 25 tarefas at\xE9 a data planejada. T\xEDtulo: Pontual.", category: "compromissos", rarity: "rara", xp: 50, coins: 30, progress: (s) => [s.tasksOnTime, 25] },
+  { code: "clean_week", title: "Semana impec\xE1vel", description: "Fechou uma semana com 5+ tarefas, todas feitas no dia. T\xEDtulo: Fiel \xE0 Agenda.", category: "compromissos", rarity: "rara", xp: 50, coins: 40, progress: (s) => [s.cleanWeeks, 1] },
+  { code: "clean_week_4", title: "Palavra de honra", description: "Quatro semanas impec\xE1veis. T\xEDtulo: Palavra de Honra e a aur\xE9ola.", category: "compromissos", rarity: "lend\xE1ria", xp: 200, coins: 150, progress: (s) => [s.cleanWeeks, 4] },
+  { code: "perfect_day_7", title: "Sete dias completos", description: "Teve sete dias com todas as ocorr\xEAncias conclu\xEDdas.", category: "rotina", rarity: "\xE9pica", xp: 80, coins: 60, progress: (s) => [s.perfectDays, 7] },
+  { code: "rel_commit_5", title: "Presente de verdade", description: "Cumpriu cinco compromissos do relacionamento.", category: "relacionamento", rarity: "rara", xp: 40, coins: 30, progress: (s) => [s.relCommitmentsDone, 5] },
+  // Saúde, estudos, finanças e mente: pela categoria do hábito.
+  { code: "health_10", title: "Corpo em movimento", description: "Concluiu 10 h\xE1bitos de sa\xFAde.", category: "saude", rarity: "comum", xp: 20, coins: 15, progress: (s) => [s.healthDone, 10] },
+  { code: "health_50", title: "Disciplina de atleta", description: "Concluiu 50 h\xE1bitos de sa\xFAde. T\xEDtulo: Atleta da Rotina.", category: "saude", rarity: "rara", xp: 60, coins: 40, progress: (s) => [s.healthDone, 50] },
+  { code: "health_100", title: "Cem treinos", description: "Concluiu 100 h\xE1bitos de sa\xFAde. Ganha a faixa de lutador.", category: "saude", rarity: "\xE9pica", xp: 150, coins: 100, progress: (s) => [s.healthDone, 100] },
+  { code: "study_10", title: "Mente afiada", description: "Concluiu 10 h\xE1bitos de estudo.", category: "estudos", rarity: "comum", xp: 20, coins: 15, progress: (s) => [s.studyDone, 10] },
+  { code: "study_50", title: "Estudioso", description: "Concluiu 50 h\xE1bitos de estudo. T\xEDtulo: Estudioso e o capelo.", category: "estudos", rarity: "rara", xp: 60, coins: 40, progress: (s) => [s.studyDone, 50] },
+  { code: "mind_10", title: "Respiro", description: "Concluiu 10 h\xE1bitos de mente (medita\xE7\xE3o, di\xE1rio, ora\xE7\xE3o\u2026).", category: "desenvolvimento", rarity: "comum", xp: 20, coins: 15, progress: (s) => [s.mindDone, 10] },
+  { code: "fin_habit_10", title: "Olho no dinheiro", description: "Concluiu 10 h\xE1bitos de finan\xE7as.", category: "financas", rarity: "comum", xp: 20, coins: 15, progress: (s) => [s.financeHabitDone, 10] },
+  { code: "savings_first", title: "Primeiro dep\xF3sito", description: "Guardou dinheiro num cofrinho pela primeira vez.", category: "financas", rarity: "comum", xp: 15, coins: 10, progress: (s) => [s.savingsDeposits, 1] },
+  { code: "savings_3", title: "Tr\xEAs meses em dia", description: "Cumpriu a regra de um cofrinho em tr\xEAs meses. T\xEDtulo: Poupador e o saco de moedas.", category: "financas", rarity: "\xE9pica", xp: 100, coins: 60, progress: (s) => [s.savingsMonthsMet, 3] },
+  { code: "first_scene", title: "Nova paisagem", description: "Comprou um cen\xE1rio para a montanha.", category: "jogo", rarity: "comum", xp: 10, coins: 0, progress: (s) => [s.scenesOwned, 1] }
 ];
 
 // src/domain/engine/commands.ts
@@ -1093,9 +1326,101 @@ function shopUnequip(k, { slot }) {
   k.d.equipped[slot] = null;
 }
 
+// src/domain/engine/readingHandlers.ts
+var ISO = /^\d{4}-\d{2}-\d{2}$/;
+var MAX_BOOKS = 500;
+function getBook(k, id) {
+  return k.d.reading.books.find((b) => b.id === id) ?? k.fail("Livro n\xE3o encontrado.");
+}
+function syncBookGoal(k, bookId) {
+  const book = k.d.reading.books.find((b) => b.id === bookId);
+  if (!book?.goalId) return;
+  const goal = k.d.goals.find((g) => g.id === book.goalId);
+  if (!goal || goal.status === "archived" || goal.status === "completed" || goal.metricSource !== "manual") return;
+  const value = goal.indicator === "binary" ? book.status === "finished" ? 1 : 0 : Math.min(pagesRead(k.d, book.id), book.totalPages);
+  if (goal.currentValue === value) return;
+  goalObserve(k, { type: "goal/observe", goalId: goal.id, value, date: k.today, note: `Leitura: ${book.title}` });
+}
+function settleBook(k, book) {
+  const done = book.status === "finished";
+  k.setSourceXp("book", book.id, done ? XP_RULES.bookFinished : 0, done ? `Livro conclu\xEDdo: ${book.title}` : `livro reaberto (${book.title})`);
+  if (done) k.grantCoins(`book:${book.id}`, COIN_RULES.bookFinished, `Livro conclu\xEDdo: ${book.title}`);
+}
+function bookUpsert(k, { book }) {
+  const title = (book.title ?? "").trim().slice(0, 120);
+  const author = (book.author ?? "").trim().slice(0, 80);
+  const totalPages = Math.round(Number(book.totalPages));
+  if (!title) k.fail("D\xEA o nome do livro.");
+  if (!Number.isFinite(totalPages) || totalPages < 1 || totalPages > 2e4) k.fail("Informe quantas p\xE1ginas o livro tem.");
+  if (!ISO.test(book.startDate)) k.fail("Data de in\xEDcio inv\xE1lida.");
+  if (book.targetDate && (!ISO.test(book.targetDate) || book.targetDate < book.startDate)) k.fail("O prazo precisa ser depois do in\xEDcio.");
+  if (book.goalId) {
+    const g = k.d.goals.find((x) => x.id === book.goalId) ?? k.fail("Objetivo n\xE3o encontrado.");
+    if (g.metricSource !== "manual") k.fail("Ligue o livro a um objetivo de valor manual.");
+    if (k.d.reading.books.some((b2) => b2.goalId === book.goalId && b2.id !== book.id)) k.fail("Este objetivo j\xE1 est\xE1 ligado a outro livro.");
+  }
+  const existing = book.id ? k.d.reading.books.find((b2) => b2.id === book.id) : void 0;
+  if (existing) {
+    Object.assign(existing, { title, author, totalPages, startDate: book.startDate, targetDate: book.targetDate || null, goalId: book.goalId || null });
+    k.log("rotina", "book", `Livro atualizado: ${title}`, "");
+    syncBookGoal(k, existing.id);
+    return;
+  }
+  if (k.d.reading.books.length >= MAX_BOOKS) k.fail("Limite de livros alcan\xE7ado.");
+  const b = { id: k.id(), title, author, totalPages, startDate: book.startDate, targetDate: book.targetDate || null, status: "reading", finishedAt: null, goalId: book.goalId || null, createdAt: k.at };
+  k.d.reading.books.push(b);
+  k.log("rotina", "book", `Livro na estante: ${title}`, author);
+  syncBookGoal(k, b.id);
+}
+function bookSetStatus(k, { bookId, status, date }) {
+  const book = getBook(k, bookId);
+  if (!["reading", "paused", "finished", "abandoned"].includes(status)) k.fail("Situa\xE7\xE3o inv\xE1lida.");
+  if (status === "finished") {
+    const when = date ?? k.today;
+    if (!ISO.test(when) || when > k.today) k.fail("A data de conclus\xE3o n\xE3o pode ser no futuro.");
+    if (when < book.startDate) k.fail("A conclus\xE3o precisa ser depois do in\xEDcio.");
+    book.finishedAt = when;
+  } else {
+    book.finishedAt = null;
+  }
+  book.status = status;
+  settleBook(k, book);
+  const labels = { reading: "Leitura retomada", paused: "Leitura pausada", finished: "Livro conclu\xEDdo", abandoned: "Livro deixado de lado" };
+  k.log("rotina", "book", `${labels[status]}: ${book.title}`, status === "finished" ? `${bookStatus(k.d, book, k.today).read} de ${book.totalPages} p\xE1ginas registradas` : "");
+  syncBookGoal(k, book.id);
+}
+function bookRemove(k, { bookId }) {
+  const book = getBook(k, bookId);
+  const used = k.d.reading.logs.some((l) => l.bookId === bookId) || k.d.occurrences.some((o) => o.bookId === bookId);
+  if (used || book.status === "finished") k.fail("Este livro j\xE1 tem leitura registrada: em vez de excluir, marque como deixado de lado.");
+  k.d.reading.books = k.d.reading.books.filter((b) => b.id !== bookId);
+}
+function logUpsert(k, { log }) {
+  const book = getBook(k, log.bookId);
+  const pages = Math.round(Number(log.pages));
+  if (!Number.isFinite(pages) || pages < 1 || pages > 5e3) k.fail("Informe quantas p\xE1ginas voc\xEA leu.");
+  if (!ISO.test(log.date)) k.fail("Data inv\xE1lida.");
+  if (log.date > k.today) k.fail("N\xE3o d\xE1 para registrar leitura no futuro.");
+  const note = (log.note ?? "").trim().slice(0, 300);
+  const existing = log.id ? k.d.reading.logs.find((l) => l.id === log.id) : void 0;
+  const before = existing?.bookId;
+  if (existing) Object.assign(existing, { bookId: book.id, date: log.date, pages, note });
+  else k.d.reading.logs.push({ id: k.id(), bookId: book.id, date: log.date, pages, note, createdAt: k.at });
+  k.log("rotina", "reading", `Leitura: ${pages} p\xE1ginas de ${book.title}`, log.date);
+  syncBookGoal(k, book.id);
+  if (before && before !== book.id) syncBookGoal(k, before);
+}
+function logRemove(k, { logId }) {
+  const l = k.d.reading.logs.find((x) => x.id === logId) ?? k.fail("Registro n\xE3o encontrado.");
+  k.d.reading.logs = k.d.reading.logs.filter((x) => x.id !== logId);
+  syncBookGoal(k, l.bookId);
+}
+
 // src/domain/engine/routineHandlers.ts
 function validateHabit(k, h) {
   if (!h.title.trim()) k.fail("D\xEA um nome ao h\xE1bito.");
+  if (h.target !== void 0 && h.target !== null && (!Number.isFinite(h.target) || h.target < 0 || h.target > 1e5)) k.fail("Meta por vez inv\xE1lida.");
+  if ((h.unit ?? "").length > 20) k.fail("Unidade longa demais.");
   if (h.frequency === "custom" && h.days.length === 0) k.fail("Escolha ao menos um dia da semana.");
   if (!Number.isFinite(h.durationMin) || h.durationMin < 0 || h.durationMin > 24 * 60) k.fail("Dura\xE7\xE3o inv\xE1lida.");
   if (h.goalId && !k.d.goals.some((g) => g.id === h.goalId)) k.fail("Objetivo vinculado n\xE3o encontrado.");
@@ -1114,7 +1439,9 @@ function habitCreate(k, { habit }) {
     goalId: habit.goalId,
     status: "active",
     startDate: habit.startDate ?? k.today,
-    createdAt: k.at
+    createdAt: k.at,
+    target: habit.target ? Math.round(habit.target * 100) / 100 : null,
+    unit: (habit.unit ?? "").trim()
   };
   k.d.habits.push(h);
   k.log("rotina", "habit", `H\xE1bito criado: ${h.title}`, "");
@@ -1123,7 +1450,8 @@ function habitUpdate(k, { habitId, patch }) {
   const h = k.d.habits.find((x) => x.id === habitId) ?? k.fail("H\xE1bito n\xE3o encontrado.");
   const next = { ...h, ...patch, title: (patch.title ?? h.title).trim() };
   validateHabit(k, next);
-  Object.assign(h, next, { days: [...next.days].sort() });
+  Object.assign(h, next, { days: [...next.days].sort(), target: next.target ? Math.round(next.target * 100) / 100 : null, unit: (next.unit ?? "").trim() });
+  for (const b of k.d.reading.books) syncBookGoal(k, b.id);
 }
 function habitSetStatus(k, { habitId, status }) {
   const h = k.d.habits.find((x) => x.id === habitId) ?? k.fail("H\xE1bito n\xE3o encontrado.");
@@ -1182,8 +1510,17 @@ function occurrenceSet(k, c) {
     occ.rescheduledTo = c.status === "rescheduled" ? c.rescheduleTo ?? null : null;
     occ.rescheduledFrom = fromReschedule ? k.d.occurrences.find((o) => o.habitId === habitId && o.rescheduledTo === date)?.date ?? null : null;
     occ.updatedAt = k.at;
+    if (c.quantity !== void 0) {
+      if (c.quantity !== null && (!Number.isFinite(c.quantity) || c.quantity < 0 || c.quantity > 1e5)) k.fail("Quantidade inv\xE1lida.");
+      occ.quantity = c.quantity === null ? null : Math.round(c.quantity * 100) / 100;
+    }
+    if (countsPages(habit) && (c.status === "done" || c.status === "partial")) {
+      if (!occ.bookId || !k.d.reading.books.some((b) => b.id === occ.bookId)) occ.bookId = currentBook(k.d)?.id ?? null;
+    }
     if (!existing) k.d.occurrences.push(occ);
   }
+  const touchedBook = existing?.bookId ?? k.d.occurrences.find((o) => o.id === c.occurrenceId)?.bookId;
+  if (touchedBook) syncBookGoal(k, touchedBook);
   const xp = c.status === "done" ? XP_RULES.habitDone : c.status === "partial" ? XP_RULES.habitPartial : 0;
   const pts = c.status === "done" ? MOUNTAIN_RULES.points.habitDone : c.status === "partial" ? MOUNTAIN_RULES.points.habitPartial : 0;
   k.setSourceXp("occurrence", c.occurrenceId, xp, c.status === "done" || c.status === "partial" ? `H\xE1bito: ${habit.title}` : `registro alterado (${habit.title})`);
@@ -1288,7 +1625,7 @@ function monthQuota(state, box, month) {
 // src/domain/engine/savingsHandlers.ts
 var round3 = (n) => Math.round(n * 100) / 100;
 var MAX_BOXES = 20;
-var ISO = /^\d{4}-\d{2}-\d{2}$/;
+var ISO2 = /^\d{4}-\d{2}-\d{2}$/;
 var MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 function getBox(k, id) {
   return k.d.finance.savings.boxes.find((b) => b.id === id) ?? k.fail("Cofrinho n\xE3o encontrado.");
@@ -1299,7 +1636,7 @@ function boxUpsert(k, { box }) {
   if (name.length > 40) k.fail("Nome do cofrinho: use no m\xE1ximo 40 caracteres.");
   const target = box.targetAmount === null || box.targetAmount === void 0 ? null : Number(box.targetAmount);
   if (target !== null && !(Number.isFinite(target) && target > 0)) k.fail("A meta do cofrinho precisa ser maior que zero.");
-  if (box.targetDate && !ISO.test(box.targetDate)) k.fail("Prazo inv\xE1lido.");
+  if (box.targetDate && !ISO2.test(box.targetDate)) k.fail("Prazo inv\xE1lido.");
   if (!["fixed", "percent", "none"].includes(box.ruleKind)) k.fail("Regra inv\xE1lida.");
   const amount = Number(box.ruleAmount) || 0;
   const pct = Number(box.rulePercent) || 0;
@@ -1366,7 +1703,7 @@ function moveUpsert(k, { move }) {
   const amount = round3(Number(move.amount));
   if (!Number.isFinite(amount) || amount === 0) k.fail("Informe um valor diferente de zero.");
   if (Math.abs(amount) > 1e9) k.fail("Valor alto demais.");
-  if (!ISO.test(move.date)) k.fail("Data inv\xE1lida.");
+  if (!ISO2.test(move.date)) k.fail("Data inv\xE1lida.");
   if (move.date > k.today) k.fail("N\xE3o d\xE1 para registrar uma movimenta\xE7\xE3o no futuro.");
   const note = (move.note ?? "").trim().slice(0, 300);
   const existing = move.id ? k.d.finance.savings.moves.find((m) => m.id === move.id) : void 0;
@@ -1492,6 +1829,16 @@ function dispatch(k, c) {
       return categoryAdd(k, c);
     case "budget/set":
       return budgetSet(k, c);
+    case "reading/book/upsert":
+      return bookUpsert(k, c);
+    case "reading/book/setStatus":
+      return bookSetStatus(k, c);
+    case "reading/book/remove":
+      return bookRemove(k, c);
+    case "reading/log/upsert":
+      return logUpsert(k, c);
+    case "reading/log/remove":
+      return logRemove(k, c);
     case "savings/box/upsert":
       return boxUpsert(k, c);
     case "savings/box/setStatus":
@@ -1580,6 +1927,7 @@ function createEmptyState(now, opts = {}) {
       budgets: [],
       savings: { boxes: [], moves: [] }
     },
+    reading: { books: [], logs: [] },
     relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], sections: [], entries: [], privateDetails: [] },
     reviews: [],
     periodReviews: [],
@@ -1600,9 +1948,15 @@ function migrateState(raw, now) {
     settings: { ...base.settings, ...r.settings },
     equipped: { ...base.equipped, ...r.equipped },
     finance: { ...base.finance, ...r.finance, savings: { ...base.finance.savings, ...r.finance?.savings } },
+    reading: { ...base.reading, ...r.reading },
     relationship: { ...base.relationship, ...r.relationship },
     schemaVersion: SCHEMA_VERSION
   };
+  if (Array.isArray(merged.inventory)) {
+    const owned = new Set(merged.inventory.map((i) => i.itemId));
+    const missing = base.inventory.filter((i) => !owned.has(i.itemId));
+    if (missing.length) merged.inventory = [...merged.inventory, ...missing.map((i) => ({ ...i, acquiredAt: merged.profile.createdAt || i.acquiredAt }))];
+  }
   for (const key of Object.keys(base)) {
     if (Array.isArray(base[key]) && !Array.isArray(merged[key])) throw new Error(`Cole\xE7\xE3o inv\xE1lida no backup: ${String(key)}`);
   }

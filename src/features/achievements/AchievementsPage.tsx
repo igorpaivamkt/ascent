@@ -60,7 +60,7 @@ export function AchievementsPage() {
               const has = g.titles.includes(t);
               return (
                 <button key={t.id} type="button" className={`chip ${g.title.id === t.id ? 'chip--solid' : has ? '' : 'chip--muted'}`} disabled={!has} aria-pressed={g.title.id === t.id}
-                  onClick={() => dispatch({ type: 'profile/update', activeTitleId: t.id })} title={t.level ? `Nível ${t.level}` : 'Conquista especial'}>
+                  onClick={() => dispatch({ type: 'profile/update', activeTitleId: t.id })} title={t.level ? `Nível ${t.level}` : `Conquista: ${ACHIEVEMENTS.find((a) => a.code === t.achievement)?.title ?? 'especial'}`}>
                   {t.name}{!has && (t.level ? ` · nv ${t.level}` : ' · especial')}
                 </button>
               );
@@ -80,6 +80,7 @@ export function AchievementsPage() {
             <li><div className="list__main">Concluir missão (projeto)</div><strong>+{XP_RULES.missionDone} XP</strong></li>
             <li><div className="list__main">Validar marco</div><strong>+{XP_RULES.milestoneReached} XP</strong></li>
             <li><div className="list__main">Revisão semanal</div><strong>+{XP_RULES.weeklyReview} XP</strong></li>
+            <li><div className="list__main">Concluir um livro</div><strong>+{XP_RULES.bookFinished} XP</strong></li>
             <li><div className="list__main">Registrar resultado real (1×/dia por meta)</div><strong>+{XP_RULES.resultRecorded} XP</strong></li>
           </ul>
           <h3 className="small muted" style={{ margin: '14px 0 6px' }}>Saldo: {integer(g.coins)} {g.coinName}</h3>
@@ -94,7 +95,7 @@ export function AchievementsPage() {
 
       <Tabs value={filter} onChange={setFilter} label="Filtrar conquistas" options={[
         { value: 'todas', label: 'Todas' }, { value: 'desbloqueadas', label: 'Desbloqueadas' }, { value: 'progresso', label: 'Em progresso' }, { value: 'bloqueadas', label: 'Bloqueadas' },
-        ...(['rotina', 'execucao', 'financas', 'negocios', 'relacionamento', 'desenvolvimento'] as AchievementCategory[]).map((c) => ({ value: c, label: ACHIEVEMENT_CATEGORY_LABEL[c] })),
+        ...(['rotina', 'compromissos', 'leitura', 'saude', 'estudos', 'execucao', 'financas', 'negocios', 'relacionamento', 'desenvolvimento', 'jogo'] as AchievementCategory[]).map((c) => ({ value: c, label: ACHIEVEMENT_CATEGORY_LABEL[c] })),
       ]} />
       <div className="ach-grid">
         {rows.map(({ def, cur, target, on, at }) => {

@@ -48,6 +48,7 @@ export function createEmptyState(now: Date, opts: { mode?: AppState['mode']; dis
       budgets: [],
       savings: { boxes: [], moves: [] },
     },
+    reading: { books: [], logs: [] },
     relationship: { profiles: [], preferences: [], dates: [], wishes: [], experiences: [], expenses: [], commitments: [], sections: [], entries: [], privateDetails: [] },
     reviews: [],
     periodReviews: [],
@@ -73,9 +74,16 @@ export function migrateState(raw: unknown, now: Date): AppState {
     settings: { ...base.settings, ...r.settings },
     equipped: { ...base.equipped, ...r.equipped },
     finance: { ...base.finance, ...r.finance, savings: { ...base.finance.savings, ...(r.finance as Partial<AppState['finance']> | undefined)?.savings } },
+    reading: { ...base.reading, ...r.reading },
     relationship: { ...base.relationship, ...r.relationship },
     schemaVersion: SCHEMA_VERSION,
   };
+  // Itens gratuitos que surgiram depois (ex.: cenário clássico) entram no inventário de quem já jogava.
+  if (Array.isArray(merged.inventory)) {
+    const owned = new Set(merged.inventory.map((i) => i.itemId));
+    const missing = base.inventory.filter((i) => !owned.has(i.itemId));
+    if (missing.length) merged.inventory = [...merged.inventory, ...missing.map((i) => ({ ...i, acquiredAt: merged.profile.createdAt || i.acquiredAt }))];
+  }
   for (const key of Object.keys(base) as (keyof AppState)[]) {
     if (Array.isArray(base[key]) && !Array.isArray(merged[key])) throw new Error(`Coleção inválida no backup: ${String(key)}`);
   }

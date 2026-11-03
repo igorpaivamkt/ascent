@@ -95,6 +95,11 @@
 .item.is-equipped::after { content: 'Equipado'; position: absolute; top: 8px; right: 8px; font-size: 0.625rem; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: var(--ink); color: var(--on-ink); }
 .item h3 { font-size: var(--t-sm); }
 .item small { font-size: var(--t-xs); color: var(--ink-3); font-weight: 600; }
+.item__scene { width: 100%; aspect-ratio: 4 / 3; border-radius: var(--r-md); overflow: hidden; }
+.item__scene .scene-thumb { height: 100%; }
+.item__collection { font-size: 0.625rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.shop__preview .stage--scene { padding: 0; overflow: hidden; aspect-ratio: 4 / 3; background: none; }
+.shop__preview .stage--scene .scene-thumb { height: 100%; border-radius: var(--r-md); }
 .item button.item__select { position: absolute; inset: 0; border: 0; background: none; border-radius: inherit; }
 .shop__preview .stage { display: grid; place-items: center; background: linear-gradient(var(--sky-top), var(--sky-bottom)); border-radius: var(--r-md); padding: 18px 0 8px; position: relative; }
 .shop__preview .stage::after { content: ''; position: absolute; left: 20%; right: 20%; bottom: 14px; height: 6px; border-radius: 50%; background: rgba(0, 0, 0, 0.12); }
@@ -249,3 +254,9 @@
 .savings-box.is-archived { opacity: 0.6; }
 .savings-suggest { flex-wrap: wrap; align-items: center; justify-content: space-between; }
 .review-sub { margin: 14px 0 6px; }
+
+/* ───────────── Leitura */
+.reading-tip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.reading-tip > svg { width: 20px; height: 20px; flex: none; }
+.reading-tip span { flex: 1 1 220px; }
+.reading-done { display: flex; align-items: center; gap: 8px; border-color: var(--success); background: var(--success-bg); }

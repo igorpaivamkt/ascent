@@ -84,3 +84,164 @@
 .hero-overlay p { font-size: var(--t-lg); color: var(--ink-2); margin-top: 6px; }
 @media (min-width: 720px) { .hero-overlay { display: block; } }
 .journey__picker { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ───────────── Skins: corpos */
+.char--robot .char__head { fill: none; stroke: none; }
+.robot-head rect { fill: var(--head); stroke: var(--c); stroke-width: 1.6; }
+.robot-head line { stroke: var(--c); stroke-width: 1.4; }
+.robot-head .robot-head__eye { fill: #39d353; stroke: none; animation: led 2.4s steps(1) infinite; }
+.robot-head .robot-head__mouth { stroke: var(--surface); stroke-width: 1; }
+.robot-head__bulb { fill: #ff4d4d; }
+@keyframes led { 0%, 92% { opacity: 1; } 94% { opacity: 0.2; } }
+.char--neon { --c: #19e6ff; --cf: #b14cff; --head: transparent; filter: drop-shadow(0 0 1.6px #19e6ff) drop-shadow(0 0 3px rgba(177, 76, 255, 0.6)); }
+
+/* ───────────── Skins: cabeça */
+.item-glasses circle { fill: rgba(220, 240, 255, 0.7); stroke: #c47a3a; stroke-width: 1.2; }
+.item-glasses line { stroke: #c47a3a !important; stroke-width: 1.1 !important; }
+.item-mask path { fill: #d62828; }
+.item-mask .item-mask__eye { fill: #fff; }
+.item-mask .item-mask__tie { fill: none; stroke: #d62828; stroke-width: 1.4; }
+.item-halo { fill: none; stroke: #f2c14e; stroke-width: 1.6; filter: drop-shadow(0 0 2px rgba(242, 193, 78, 0.9)); animation: halo 2.6s ease-in-out infinite; }
+@keyframes halo { 0%, 100% { translate: 0 0; } 50% { translate: 0 -1px; } }
+.item-astro__bubble { fill: rgba(170, 210, 255, 0.28); stroke: var(--c); stroke-width: 1.3; }
+.item-astro__shine { fill: none; stroke: #fff; stroke-width: 1.2; opacity: 0.9; }
+.item-astro__collar { fill: #d7dbe0; stroke: var(--c); stroke-width: 1; }
+.item-wizard path { fill: #3b4cc0; stroke: var(--c); stroke-width: 1; }
+.item-wizard .item-wizard__brim { stroke: #3b4cc0 !important; stroke-width: 2.4 !important; }
+.item-wizard .item-wizard__star { fill: #f5d76e; stroke: none; }
+.item-viking__dome { fill: #9aa0a6; stroke: var(--c); stroke-width: 1.2; }
+.item-viking__horn { fill: #efe6cf; stroke: var(--c); stroke-width: 1; }
+.item-viking line { stroke: var(--c) !important; stroke-width: 1.6 !important; }
+.item-viking .item-viking__rib { stroke-width: 1.1 !important; }
+.item-pirate path { fill: var(--c); }
+.item-pirate__skull { fill: var(--surface); }
+.item-pirate .item-pirate__strap { stroke: var(--c) !important; stroke-width: 0.9 !important; }
+.item-pirate__patch { fill: #2b2b2b; stroke: #8a8a8a; stroke-width: 0.5; }
+.item-ninja rect { fill: #3d5a80; }
+.item-ninja .item-ninja__plate { fill: #c9ced4; }
+.item-ninja__tail { fill: none; stroke: #3d5a80; stroke-width: 1.6; }
+.item-fedora path { fill: #5b4636; }
+.item-fedora .item-fedora__brim { fill: none; stroke: #5b4636; stroke-width: 2.2; }
+.item-fedora .item-fedora__band { stroke: #1d1d1f !important; stroke-width: 1.4 !important; }
+.item-headset__arc { fill: none; stroke: var(--c); stroke-width: 1.6; }
+.item-headset__cup { fill: var(--c); stroke: #39d353; stroke-width: 0.9; }
+.item-headset__mic { fill: none; stroke: var(--c); stroke-width: 1; }
+.item-headset__tip { fill: #39d353; }
+.item-grad rect, .item-grad polygon { fill: #1d1d1f; stroke: var(--surface); stroke-width: 0.5; }
+.item-grad__tassel { fill: none; stroke: #f2c14e; stroke-width: 0.9; }
+.item-grad .item-grad__tip { fill: #f2c14e; stroke: none; }
+
+/* ───────────── Skins: roupas, mochilas e mãos */
+.char__cape--hero { fill: #d62828; opacity: 1; }
+.item-emblem circle { fill: #f2c14e; stroke: var(--c); stroke-width: 0.8; }
+.item-emblem__mark { fill: #d62828; }
+.item-cardigan path { fill: #a1785c; }
+.item-cardigan .item-cardigan__v { fill: none; stroke: var(--surface); stroke-width: 0.9; }
+.item-cardigan__btn { fill: var(--surface); }
+.item-labcoat path { fill: #fafafa; stroke: var(--c); stroke-width: 0.9; }
+.item-labcoat .item-labcoat__line { fill: none; stroke-width: 0.7; }
+.item-labcoat line.item-labcoat__line { stroke: var(--c) !important; stroke-width: 0.7 !important; }
+.item-labcoat__pocket { fill: none; stroke: var(--c); stroke-width: 0.7; }
+.item-gi path { fill: #f4f4f2; stroke: var(--c); stroke-width: 0.8; }
+.item-gi .item-gi__lapel { fill: none; stroke: var(--c); stroke-width: 0.7; }
+.item-gi__belt { fill: #111; }
+.item-gi .item-gi__belt-tail { fill: none; stroke: #111; stroke-width: 1.4; }
+.item-jetpack rect { fill: #9aa0a6; stroke: var(--c); stroke-width: 1; }
+.item-jetpack .item-jetpack__strap { stroke-width: 2; }
+.item-jetpack__flame { fill: #ff9f1c; stroke: #ff4d00; stroke-width: 0.6; transform-box: fill-box; transform-origin: top center; animation: flame 0.24s ease-in-out infinite alternate; }
+.item-jetpack__flame--b { animation-delay: 0.12s; }
+@keyframes flame { from { transform: scaleY(0.7); } to { transform: scaleY(1.25); } }
+.item-book path { fill: #fffdf6; stroke: var(--c); stroke-width: 0.9; }
+.item-book .item-book__lines { fill: none; stroke: var(--ink-4); stroke-width: 0.6; }
+.item-plasma__blade { stroke: #7df9ff !important; stroke-width: 2.2 !important; filter: drop-shadow(0 0 2px #19e6ff) drop-shadow(0 0 4px #19e6ff); animation: plasma 1.6s ease-in-out infinite; }
+.item-plasma__hilt { stroke: #6b7076 !important; stroke-width: 2.6 !important; }
+@keyframes plasma { 0%, 100% { opacity: 1; } 50% { opacity: 0.82; } }
+.item-staff line { stroke: #8a5a2b !important; stroke-width: 2.2 !important; }
+.item-staff__orb { fill: #b69cff; filter: drop-shadow(0 0 3px #a78bfa); animation: plasma 2.2s ease-in-out infinite; }
+.item-magnifier line { stroke: #5b4636 !important; stroke-width: 2 !important; }
+.item-magnifier__lens { fill: rgba(190, 225, 255, 0.4); stroke: var(--c); stroke-width: 1.4; }
+.item-controller rect { fill: var(--c); }
+.item-controller__dpad { fill: none; stroke: var(--surface); stroke-width: 0.9; }
+.item-controller__btn { fill: #ff4d4d; }
+.item-controller__btn--b { fill: #39d353; }
+.item-katana__blade { fill: none; stroke: #d5dae0; stroke-width: 1.6; filter: drop-shadow(0 0 0.6px #555); }
+.item-katana__guard { stroke: #c9a227 !important; stroke-width: 1.4 !important; }
+.item-katana__hilt { stroke: #1d1d1f !important; stroke-width: 2.4 !important; }
+.item-coinbag path { fill: #c9a227; stroke: var(--c); stroke-width: 0.8; }
+.item-coinbag .item-coinbag__tie { fill: #8a6d12; }
+.item-coinbag__mark { font: 800 5px var(--font-display); fill: #fff6cc; }
+
+/* ───────────── Efeitos */
+.fx-pages__leaf { animation: confetti 1.6s ease-in infinite; transform-box: fill-box; transform-origin: center; }
+.fx-pages rect { fill: #fffdf6; stroke: var(--c); stroke-width: 0.6; }
+.fx-pages path { fill: none; stroke: var(--ink-4); stroke-width: 0.5; }
+.fx-stars path { fill: #f5d76e; stroke: #c99a1e; stroke-width: 0.4; transform-box: fill-box; transform-origin: center; animation: confetti 1.5s ease-in infinite; }
+.fx-hearts path { fill: #e63946; transform-box: fill-box; transform-origin: center; animation: rise 1.6s ease-out infinite; }
+@keyframes rise { 0% { transform: translateY(10px) scale(0.6); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateY(-26px) scale(1.1); opacity: 0; } }
+.fx-lightning path { fill: #ffe14d; stroke: #f2a900; stroke-width: 0.5; filter: drop-shadow(0 0 2px #ffe14d); animation: spark 0.7s steps(2) infinite; }
+
+/* ───────────── Cenários da montanha (cada um com sua paleta, igual no tema claro e escuro) */
+.scene .star { fill: #fff; animation: twinkle 3.2s ease-in-out infinite; }
+@keyframes twinkle { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+.scene-sunset {
+  --sky-top: #ff8a5b; --sky-bottom: #ffd29a; --cloud: #ffb08a; --m-far: #c75b6b; --m-mid: #9c3d5c; --m-main: #6e2a4f; --m-main-dark: #4c1d3d;
+  --m-face: #8f3f63; --m-snow: #ffd9c2; --m-ground: #2a0f22; --trail: #fff4e8; --char: #1d0b18; --char-far: #4c1d3d; --char-fill: #1d0b18;
+  --ink: #1d0b18; --surface: #fff4e8; --on-ink: #fff4e8; --surface-3: #ffd29a; --ink-3: #6e2a4f; --ink-4: #9c3d5c;
+}
+.scene-autumn {
+  --sky-top: #ffd98e; --sky-bottom: #fff3d6; --cloud: #ffeec4; --m-far: #e0a96d; --m-mid: #c8743c; --m-main: #a0522d; --m-main-dark: #7a3b1f;
+  --m-face: #c7814f; --m-snow: #fff3d6; --m-ground: #3b2412; --trail: #fffaf0; --char: #2b1a0d; --char-far: #6b4226; --char-fill: #2b1a0d;
+  --ink: #2b1a0d; --surface: #fffaf0; --on-ink: #fffaf0; --surface-3: #ffd98e; --ink-3: #7a3b1f; --ink-4: #a0522d;
+}
+.scene-autumn .leaf { animation: fall 10s linear infinite; }
+.scene-autumn .leaf--0 { fill: #e85d04; } .scene-autumn .leaf--1 { fill: #f48c06; } .scene-autumn .leaf--2 { fill: #9d0208; }
+.scene-winter {
+  --sky-top: #e7f0f7; --sky-bottom: #ffffff; --cloud: #ffffff; --m-far: #dbe6ef; --m-mid: #c3d4e2; --m-main: #a7bccd; --m-main-dark: #869fb4;
+  --m-face: #f4f8fb; --m-snow: #ffffff; --m-ground: #f4f8fb; --trail: #5b7a93; --char: #13212c; --char-far: #4d6577; --char-fill: #13212c;
+  --ink: #13212c; --surface: #ffffff; --on-ink: #ffffff; --surface-3: #c3d4e2; --ink-3: #4d6577; --ink-4: #869fb4;
+}
+.scene-winter .basecamp path:first-child { fill: #13212c; }
+.snowfall circle { fill: #fff; stroke: #c3d4e2; stroke-width: 0.4; animation: fall 8s linear infinite; }
+@keyframes fall { from { translate: 0 -620px; } to { translate: 30px 40px; } }
+.scene-night {
+  --sky-top: #0b1530; --sky-bottom: #1d2b53; --cloud: #24345f; --m-far: #1c2a4d; --m-mid: #172240; --m-main: #121b33; --m-main-dark: #0c1226;
+  --m-face: #26375f; --m-snow: #c8d4f0; --m-ground: #05080f; --trail: #f4f1e6; --char: #f4f1e6; --char-far: #9fb0d6; --char-fill: #f4f1e6;
+  --ink: #f4f1e6; --surface: #0b1530; --on-ink: #0b1530; --surface-3: #24345f; --ink-3: #9fb0d6; --ink-4: #6c7ea8;
+}
+.scene-aurora {
+  --sky-top: #041420; --sky-bottom: #0b2c3a; --cloud: #103a4a; --m-far: #0f3140; --m-mid: #0b2633; --m-main: #081c26; --m-main-dark: #05121a;
+  --m-face: #134152; --m-snow: #d7fff0; --m-ground: #02080c; --trail: #d7fff0; --char: #e8fff7; --char-far: #8fd9c3; --char-fill: #e8fff7;
+  --ink: #e8fff7; --surface: #041420; --on-ink: #041420; --surface-3: #103a4a; --ink-3: #8fd9c3; --ink-4: #4f8f80;
+}
+.aurora path { animation: aurora 7s ease-in-out infinite alternate; transform-origin: center; }
+@keyframes aurora { from { opacity: 0.55; translate: -20px 0; } to { opacity: 1; translate: 20px 6px; } }
+.scene-canyon {
+  --sky-top: #ffcf99; --sky-bottom: #fff0dc; --cloud: #ffe2bf; --m-far: #e9a06b; --m-mid: #d2733f; --m-main: #b4512b; --m-main-dark: #8a3a1f;
+  --m-face: #d98a5a; --m-snow: #ffe2bf; --m-ground: #4a1f10; --trail: #fff6ea; --char: #2a1006; --char-far: #6e2e17; --char-fill: #2a1006;
+  --ink: #2a1006; --surface: #fff6ea; --on-ink: #fff6ea; --surface-3: #ffcf99; --ink-3: #8a3a1f; --ink-4: #b4512b;
+}
+.scene-volcano {
+  --sky-top: #2b1a1a; --sky-bottom: #5a2c22; --cloud: #4a3530; --m-far: #3b2a28; --m-mid: #2e2120; --m-main: #241918; --m-main-dark: #181010;
+  --m-face: #3e2b28; --m-snow: #ff7b29; --m-ground: #0d0707; --trail: #ffd3b0; --char: #ffe8d6; --char-far: #c99a85; --char-fill: #ffe8d6;
+  --ink: #ffe8d6; --surface: #2b1a1a; --on-ink: #2b1a1a; --surface-3: #5a2c22; --ink-3: #c99a85; --ink-4: #8a5f52;
+}
+.lava path { fill: #ff5400; filter: drop-shadow(0 0 6px #ff7b00); animation: plasma 2.4s ease-in-out infinite; }
+.lava__glow { fill: #ffb000; filter: blur(4px); animation: plasma 1.8s ease-in-out infinite; }
+.smoke circle { fill: #6b5a55; opacity: 0.5; animation: drift 14s ease-in-out infinite alternate; }
+.scene-synthwave {
+  --sky-top: #1a0b3d; --sky-bottom: #5b1a7a; --cloud: #3b1466; --m-far: #3d1466; --m-mid: #2c0f4d; --m-main: #1f0a38; --m-main-dark: #150627;
+  --m-face: #4d1a80; --m-snow: #ff2bd6; --m-ground: #0b0318; --trail: #2bf3ff; --char: #f8f0ff; --char-far: #c79bff; --char-fill: #f8f0ff;
+  --ink: #f8f0ff; --surface: #1a0b3d; --on-ink: #1a0b3d; --surface-3: #3b1466; --ink-3: #c79bff; --ink-4: #8b5fc7;
+}
+.scene-synthwave .scenery polygon { stroke: #ff2bd6; stroke-width: 1.2; stroke-opacity: 0.7; }
+.retro-grid line { stroke: #2bf3ff; stroke-width: 1; opacity: 0.7; }
+.scene-alien {
+  --sky-top: #0e2a3a; --sky-bottom: #2d1b4e; --cloud: #3a2a63; --m-far: #4a2d73; --m-mid: #3b1f60; --m-main: #2c1450; --m-main-dark: #1e0c3a;
+  --m-face: #5b3a8f; --m-snow: #7df9c0; --m-ground: #0a0618; --trail: #7df9c0; --char: #effff9; --char-far: #a49ad6; --char-fill: #effff9;
+  --ink: #effff9; --surface: #0e2a3a; --on-ink: #0e2a3a; --surface-3: #3a2a63; --ink-3: #a49ad6; --ink-4: #6f62a8;
+}
+/* Prévias de cenário na loja */
+.scene-thumb { display: block; width: 100%; height: auto; border-radius: var(--r-md); overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .snowfall circle, .leaf, .aurora path, .star, .lava path, .lava__glow, .smoke circle { animation: none !important; }
+}

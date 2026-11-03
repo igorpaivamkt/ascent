@@ -3,11 +3,15 @@ import { dayAgenda, isScheduled, MISS_REASONS } from '../routine';
 import type { Habit } from '../types';
 import type { Command } from './commands';
 import type { Kernel } from './kernel';
+import { countsPages, currentBook } from '../reading';
+import { syncBookGoal } from './readingHandlers';
 
 type C<T extends Command['type']> = Extract<Command, { type: T }>;
 
-function validateHabit(k: Kernel, h: Pick<Habit, 'title' | 'frequency' | 'days' | 'durationMin' | 'goalId'>): void {
+function validateHabit(k: Kernel, h: Pick<Habit, 'title' | 'frequency' | 'days' | 'durationMin' | 'goalId' | 'target' | 'unit'>): void {
   if (!h.title.trim()) k.fail('Dê um nome ao hábito.');
+  if (h.target !== undefined && h.target !== null && (!Number.isFinite(h.target) || h.target < 0 || h.target > 100_000)) k.fail('Meta por vez inválida.');
+  if ((h.unit ?? '').length > 20) k.fail('Unidade longa demais.');
   if (h.frequency === 'custom' && h.days.length === 0) k.fail('Escolha ao menos um dia da semana.');
   if (!Number.isFinite(h.durationMin) || h.durationMin < 0 || h.durationMin > 24 * 60) k.fail('Duração inválida.');
   if (h.goalId && !k.d.goals.some((g) => g.id === h.goalId)) k.fail('Objetivo vinculado não encontrado.');
@@ -19,6 +23,7 @@ export function habitCreate(k: Kernel, { habit }: C<'habit/create'>): void {
     id: k.id(), title: habit.title.trim(), description: habit.description.trim(), category: habit.category || 'geral',
     frequency: habit.frequency, days: [...habit.days].sort(), timeWindow: habit.timeWindow, durationMin: habit.durationMin,
     goalId: habit.goalId, status: 'active', startDate: habit.startDate ?? k.today, createdAt: k.at,
+    target: habit.target ? Math.round(habit.target * 100) / 100 : null, unit: (habit.unit ?? '').trim(),
   };
   k.d.habits.push(h);
   k.log('rotina', 'habit', `Hábito criado: ${h.title}`, '');
@@ -28,7 +33,9 @@ export function habitUpdate(k: Kernel, { habitId, patch }: C<'habit/update'>): v
   const h = k.d.habits.find((x) => x.id === habitId) ?? k.fail('Hábito não encontrado.');
   const next = { ...h, ...patch, title: (patch.title ?? h.title).trim() };
   validateHabit(k, next);
-  Object.assign(h, next, { days: [...next.days].sort() });
+  Object.assign(h, next, { days: [...next.days].sort(), target: next.target ? Math.round(next.target * 100) / 100 : null, unit: (next.unit ?? '').trim() });
+  // Mudou a meta ou a categoria: páginas dos livros e objetivos ligados se reajustam.
+  for (const b of k.d.reading.books) syncBookGoal(k, b.id);
 }
 
 export function habitSetStatus(k: Kernel, { habitId, status }: C<'habit/setStatus'>): void {
@@ -84,8 +91,18 @@ export function occurrenceSet(k: Kernel, c: C<'occurrence/set'>): void {
     occ.rescheduledTo = c.status === 'rescheduled' ? (c.rescheduleTo ?? null) : null;
     occ.rescheduledFrom = fromReschedule ? (k.d.occurrences.find((o) => o.habitId === habitId && o.rescheduledTo === date)?.date ?? null) : null;
     occ.updatedAt = k.at;
+    if (c.quantity !== undefined) {
+      if (c.quantity !== null && (!Number.isFinite(c.quantity) || c.quantity < 0 || c.quantity > 100_000)) k.fail('Quantidade inválida.');
+      occ.quantity = c.quantity === null ? null : Math.round(c.quantity * 100) / 100;
+    }
+    // Páginas de leitura vão para o livro atual no momento do registro (e ficam nele).
+    if (countsPages(habit) && (c.status === 'done' || c.status === 'partial')) {
+      if (!occ.bookId || !k.d.reading.books.some((b) => b.id === occ.bookId)) occ.bookId = currentBook(k.d)?.id ?? null;
+    }
     if (!existing) k.d.occurrences.push(occ);
   }
+  const touchedBook = existing?.bookId ?? k.d.occurrences.find((o) => o.id === c.occurrenceId)?.bookId;
+  if (touchedBook) syncBookGoal(k, touchedBook);
 
   const xp = c.status === 'done' ? XP_RULES.habitDone : c.status === 'partial' ? XP_RULES.habitPartial : 0;
   const pts = c.status === 'done' ? MOUNTAIN_RULES.points.habitDone : c.status === 'partial' ? MOUNTAIN_RULES.points.habitPartial : 0;

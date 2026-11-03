@@ -8,18 +8,19 @@ import { ConfirmButton, Empty, Progress, Segmented, Tabs } from '../../component
 import { useToday } from '../../hooks/useGame';
 import { integer, percent } from '../../utils/format';
 import { AgendaList, HabitForm, OccurrenceSheet, TaskForm } from './RoutineParts';
+import { ReadingView } from './ReadingView';
 
-type View = 'dia' | 'habitos' | 'metricas';
+type View = 'dia' | 'habitos' | 'leitura' | 'metricas';
 type Filter = 'todos' | 'pendentes' | 'concluidos' | 'outros';
 
 export function RoutinePage() {
   const state = useAppState();
   const today = useToday();
-  const [view, setView] = useState<View>('dia');
+  const [view, setView] = useState<View>(() => (/aba=leitura/.test(location.hash) ? 'leitura' : 'dia'));
   const [date, setDate] = useState(today);
   const [filter, setFilter] = useState<Filter>('todos');
   const [sheet, setSheet] = useState<AgendaItem | null>(null);
-  const [habitForm, setHabitForm] = useState<{ open: boolean; habit: Habit | null }>({ open: false, habit: null });
+  const [habitForm, setHabitForm] = useState<{ open: boolean; habit: Habit | null; preset?: 'leitura' }>({ open: false, habit: null });
   const [taskForm, setTaskForm] = useState(false);
 
   const agenda = dayAgenda(state, date);
@@ -38,7 +39,7 @@ export function RoutinePage() {
           <button className="btn btn--primary" onClick={() => setHabitForm({ open: true, habit: null })}><LuRepeat /> Novo hábito</button>
         </div>
       </header>
-      <Tabs value={view} onChange={setView} label="Visões da rotina" options={[{ value: 'dia', label: 'Dia' }, { value: 'habitos', label: 'Hábitos' }, { value: 'metricas', label: 'Métricas' }]} />
+      <Tabs value={view} onChange={setView} label="Visões da rotina" options={[{ value: 'dia', label: 'Dia' }, { value: 'habitos', label: 'Hábitos' }, { value: 'leitura', label: 'Leitura' }, { value: 'metricas', label: 'Métricas' }]} />
 
       {view === 'dia' && (
         <div className="grid grid--2">
@@ -66,10 +67,11 @@ export function RoutinePage() {
       )}
 
       {view === 'habitos' && <HabitList onEdit={(habit) => setHabitForm({ open: true, habit })} />}
+      {view === 'leitura' && <ReadingView onNewHabit={() => setHabitForm({ open: true, habit: null, preset: 'leitura' })} />}
       {view === 'metricas' && <RoutineMetrics />}
 
       <OccurrenceSheet item={sheet} onClose={() => setSheet(null)} />
-      <HabitForm open={habitForm.open} habit={habitForm.habit} onClose={() => setHabitForm({ open: false, habit: null })} />
+      <HabitForm open={habitForm.open} habit={habitForm.habit} preset={habitForm.preset} onClose={() => setHabitForm({ open: false, habit: null })} />
       <TaskForm open={taskForm} onClose={() => setTaskForm(false)} />
     </>
   );
