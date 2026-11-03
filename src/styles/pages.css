@@ -195,6 +195,7 @@
 .ficha__suggest { margin-top: 14px; display: grid; gap: 8px; }
 .chip--btn { cursor: pointer; min-height: 36px; padding: 0 12px; }
 .chip--btn:hover { background: var(--surface-2); }
+.chip--btn.chip--solid:hover { background: var(--ink); color: var(--on-ink); opacity: 0.9; }
 .ficha__add { display: flex; gap: 8px; margin-top: 12px; }
 .ficha__add .input { flex: 1; min-width: 0; }
 .ficha__done { margin-top: 14px; }

@@ -1,5 +1,30 @@
 /* ───────────── Relatórios para exportar (sempre em "papel" claro, também no tema escuro) */
-.report-body { background: #ececea; min-height: 100dvh; padding: 0 0 32px; color: #111; }
+.report-body {
+  /* O papel é sempre claro, mesmo no tema escuro: os controles daqui usam a paleta clara. */
+  --bg: #f4f4f2; --surface: #ffffff; --surface-2: #efefed; --surface-3: #e3e3e0; --ink: #111111; --ink-2: #3a3a3a; --ink-3: #6b6b6b; --ink-4: #9a9a97;
+  --line: #d9d9d5; --line-strong: #161616; --on-ink: #ffffff; color-scheme: light;
+  background: #ececea; min-height: 100dvh; padding: 0 0 32px; color: #111;
+}
+.report-options { width: min(100% - 24px, 820px); margin: 16px auto 0; background: #fff; border: 1px solid #d9d9d5; border-radius: 18px; color: #111; }
+.report-options > summary { cursor: pointer; list-style: none; padding: 14px 18px; font-family: var(--font-display); font-weight: 800; font-size: 15px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+.report-options > summary::-webkit-details-marker { display: none; }
+.report-options > summary::before { content: '▸'; font-size: 12px; transition: transform .15s; }
+.report-options[open] > summary::before { transform: rotate(90deg); }
+.report-options > summary .muted { font-family: var(--font-body); font-weight: 500; font-size: 13px; color: #6b6b6b; }
+.report-options__body { display: grid; gap: 16px; padding: 0 18px 18px; }
+.report-options__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.report-options__row strong { font-size: 13px; margin-right: 4px; }
+.report-options__period { display: grid; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid #e1e1dd; }
+.report-options__group { border: 0; margin: 0; padding: 0; min-width: 0; }
+.report-options__group legend { padding: 0; margin-bottom: 8px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #6b6b6b; }
+.report-options__checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; }
+.report-check { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border: 1px solid #d9d9d5; border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: 600; background: #fff; }
+.report-check:has(input:checked) { border-color: #111; background: #f4f4f2; }
+.report-check input { width: 18px; height: 18px; accent-color: #111; flex: none; }
+.report-check span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.report-check small { color: #6b6b6b; font-weight: 500; font-size: 12px; white-space: nowrap; }
+.report-check.is-empty { color: #6b6b6b; }
+.report-options .xs { font-size: 12px; margin: 0; }
 .report-toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; background: rgba(236, 236, 234, 0.92); backdrop-filter: blur(6px); border-bottom: 1px solid #d9d9d5; }
 .report-toolbar .spacer { flex: 1; }
 .report-toolbar .btn { background: #fff; color: #111; border-color: #111; }
@@ -63,7 +88,7 @@
 @page { size: A4; margin: 14mm 12mm; }
 @media print {
   html, body { background: #fff !important; }
-  .report-toolbar { display: none !important; }
+  .report-toolbar, .report-options { display: none !important; }
   .report-body { background: #fff; padding: 0; }
   .report-paper { width: 100%; margin: 0; padding: 0; box-shadow: none; border-radius: 0; font-size: 12px; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
