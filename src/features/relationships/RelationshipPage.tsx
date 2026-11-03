@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { LuCalendar, LuCheck, LuEye, LuEyeOff, LuGift, LuHeart, LuLock, LuPencil, LuPlus, LuTrash2, LuX } from 'react-icons/lu';
 import { useAppState, useDispatch, useStore } from '../../app/store';
 import { formatDate, formatMonth, monthKey } from '../../domain/dates';
-import type { RelExpense, RelExperience, RelProfile, RelWish } from '../../domain/types';
+import type { RelCommitment, RelDate, RelExpense, RelExperience, RelPreference, RelProfile, RelWish } from '../../domain/types';
 import { ConfirmButton, Empty, Field, Modal, Segmented, Tabs } from '../../components/ui';
 import { useToday } from '../../hooks/useGame';
 import { initials, money, money0, parseNumber } from '../../utils/format';
@@ -10,6 +10,7 @@ import { compressImage } from '../../utils/image';
 import { DemoBanner } from '../settings/DemoBanner';
 import { ExperienceForm } from './ExperienceForm';
 import { ProfileTab } from './ProfileTab';
+import { CommitmentEditForm, DateEditForm, EXPENSE_CATEGORIES, ExpenseEditForm, PreferenceEditForm, WishEditForm } from './RelEditForms';
 
 type Tab = 'perfil' | 'preferencias' | 'experiencias' | 'gastos' | 'compromissos' | 'privado';
 
@@ -135,6 +136,9 @@ function Preferences({ profile }: { profile: RelProfile }) {
   const [certainty, setCertainty] = useState<'confirmada' | 'suposicao'>('confirmada');
   const [dateForm, setDateForm] = useState({ title: '', date: today, yearly: true });
   const [wish, setWish] = useState<{ title: string; kind: RelWish['kind'] }>({ title: '', kind: 'presente' });
+  const [editPref, setEditPref] = useState<RelPreference | null>(null);
+  const [editDate, setEditDate] = useState<RelDate | null>(null);
+  const [editWish, setEditWish] = useState<RelWish | null>(null);
   const grouped = [...new Set(prefs.map((p) => p.category))];
   return (
     <div className="grid grid--2">
@@ -149,6 +153,7 @@ function Preferences({ profile }: { profile: RelProfile }) {
                   {p.value}{p.certainty === 'suposicao' && <span className="xs muted"> (suposição)</span>}
                   {p.certainty === 'suposicao' && <button type="button" aria-label={`Confirmar ${p.value}`} onClick={() => dispatch({ type: 'rel/upsert', entity: 'preferences', value: { ...p, certainty: 'confirmada' } })}><LuCheck size={13} /></button>}
                   <button type="button" aria-label={`${p.outdated ? 'Reativar' : 'Marcar como desatualizada'}: ${p.value}`} onClick={() => dispatch({ type: 'rel/upsert', entity: 'preferences', value: { ...p, outdated: !p.outdated } })}><LuCalendar size={13} /></button>
+                  <button type="button" aria-label={`Editar ${p.value}`} onClick={() => setEditPref(p)}><LuPencil size={13} /></button>
                   <button type="button" aria-label={`Remover ${p.value}`} onClick={() => dispatch({ type: 'rel/remove', entity: 'preferences', id: p.id })}><LuX size={13} /></button>
                 </span>
               ))}
@@ -170,7 +175,10 @@ function Preferences({ profile }: { profile: RelProfile }) {
           <ul className="list">
             {dates.map((d) => (
               <li key={d.id}><div className="list__main"><div className="list__title">{d.title}</div><div className="list__meta">{formatDate(d.date, { year: !d.yearly })}{d.yearly ? ' · todo ano' : ''}</div></div>
-                <ConfirmButton className="icon-btn" ariaLabel={`Remover ${d.title}`} confirmLabel="Remover" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'dates', id: d.id })}><LuTrash2 /></ConfirmButton></li>
+                <div className="list__end">
+                  <button className="icon-btn" aria-label={`Editar ${d.title}`} onClick={() => setEditDate(d)}><LuPencil /></button>
+                  <ConfirmButton className="icon-btn" ariaLabel={`Remover ${d.title}`} confirmLabel="Remover" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'dates', id: d.id })}><LuTrash2 /></ConfirmButton>
+                </div></li>
             ))}
           </ul>
           <div className="form-row" style={{ marginTop: 10 }}>
@@ -189,7 +197,10 @@ function Preferences({ profile }: { profile: RelProfile }) {
               <li key={w.id}>
                 <span className="tick-wrap"><button type="button" role="checkbox" className="tick" aria-checked={w.status === 'realizado'} aria-label={`${w.status === 'realizado' ? 'Reabrir' : 'Marcar como realizado'}: ${w.title}`} onClick={() => dispatch({ type: 'rel/toggle', entity: 'wishes', id: w.id })}><LuCheck /></button></span>
                 <div className="list__main"><div className="list__title">{w.title}</div><div className="list__meta">{w.kind}{w.note ? ` · ${w.note}` : ''}</div></div>
-                <ConfirmButton className="icon-btn" ariaLabel={`Remover ${w.title}`} confirmLabel="Remover" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'wishes', id: w.id })}><LuTrash2 /></ConfirmButton>
+                <div className="list__end">
+                  <button className="icon-btn" aria-label={`Editar ${w.title}`} onClick={() => setEditWish(w)}><LuPencil /></button>
+                  <ConfirmButton className="icon-btn" ariaLabel={`Remover ${w.title}`} confirmLabel="Remover" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'wishes', id: w.id })}><LuTrash2 /></ConfirmButton>
+                </div>
               </li>
             ))}
           </ul>
@@ -200,6 +211,9 @@ function Preferences({ profile }: { profile: RelProfile }) {
           <button className="btn btn--sm" style={{ marginTop: 8 }} onClick={async () => { if (await dispatch({ type: 'rel/upsert', entity: 'wishes', value: { profileId: profile.id, title: wish.title, kind: wish.kind, status: 'pendente', note: '' } })) setWish({ title: '', kind: 'presente' }); }}><LuPlus /> Adicionar</button>
         </section>
       </div>
+      <PreferenceEditForm key={editPref?.id ?? 'none'} item={editPref} categories={PREF_CATEGORIES} onClose={() => setEditPref(null)} />
+      <DateEditForm key={editDate?.id ?? 'none'} item={editDate} onClose={() => setEditDate(null)} />
+      <WishEditForm key={editWish?.id ?? 'none'} wish={editWish} onClose={() => setEditWish(null)} />
     </div>
   );
 }
@@ -259,6 +273,7 @@ function Expenses({ profile }: { profile: RelProfile }) {
   const store = useStore();
   const [f, setF] = useState({ description: '', amount: '', category: 'Restaurantes', date: today, experienceId: '', paidBy: 'eu' as RelExpense['paidBy'] });
   const [alsoFinance, setAlsoFinance] = useState(true);
+  const [editExp, setEditExp] = useState<RelExpense | null>(null);
   const byMonth = new Map<string, number>();
   const byCat = new Map<string, number>();
   for (const e of list) {
@@ -280,11 +295,15 @@ function Expenses({ profile }: { profile: RelProfile }) {
             <li key={e.id}>
               <div className="list__main"><div className="list__title">{e.description}</div><div className="list__meta"><span>{formatDate(e.date)}</span><span>{e.category}</span><span>Pago por: {e.paidBy}</span>{e.experienceId && <span>{exps.find((x) => x.id === e.experienceId)?.title}</span>}{e.txId && <span className="chip chip--muted rel-linked">em Finanças</span>}</div></div>
               <span className="tx-amount">{money(e.amount)}</span>
-              <ConfirmButton className="icon-btn" ariaLabel={`Excluir ${e.description}`} confirmLabel="Excluir" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'expenses', id: e.id })}><LuTrash2 /></ConfirmButton>
+              <div className="list__end">
+                <button className="icon-btn" aria-label={`Editar ${e.description}`} onClick={() => setEditExp(e)}><LuPencil /></button>
+                <ConfirmButton className="icon-btn" ariaLabel={`Excluir ${e.description}`} confirmLabel="Excluir" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'expenses', id: e.id })}><LuTrash2 /></ConfirmButton>
+              </div>
             </li>
           ))}
         </ul>
         <p className="xs muted" style={{ marginTop: 8 }}>Valores registrados não medem afeto nem compromisso — servem para planejar o orçamento de experiências.</p>
+        <ExpenseEditForm key={editExp?.id ?? 'none'} expense={editExp} profile={profile} onClose={() => setEditExp(null)} />
       </section>
       <div className="stack">
         <section className="card" aria-labelledby="exn-h">
@@ -296,7 +315,7 @@ function Expenses({ profile }: { profile: RelProfile }) {
               <Field label="Data"><input className="input" type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></Field>
             </div>
             <div className="form-row">
-              <Field label="Categoria"><select className="select" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{['Restaurantes', 'Passeios', 'Presentes', 'Viagens', 'Experiências', 'Outros'].map((c) => <option key={c}>{c}</option>)}</select></Field>
+              <Field label="Categoria"><select className="select" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{EXPENSE_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></Field>
               <Field label="Pago por"><select className="select" value={f.paidBy} onChange={(e) => setF({ ...f, paidBy: e.target.value as RelExpense['paidBy'] })}><option value="eu">Eu</option><option value="dividido">Dividido</option><option value="outra pessoa">Outra pessoa</option></select></Field>
             </div>
             <Field label="Experiência relacionada"><select className="select" value={f.experienceId} onChange={(e) => setF({ ...f, experienceId: e.target.value })}><option value="">Nenhuma</option>{exps.map((x) => <option key={x.id} value={x.id}>{x.title} ({formatDate(x.date)})</option>)}</select></Field>
@@ -340,6 +359,7 @@ function Commitments({ profile }: { profile: RelProfile }) {
   const list = state.relationship.commitments.filter((c) => c.profileId === profile.id).sort((a, b) => a.status.localeCompare(b.status) || a.dueDate.localeCompare(b.dueDate));
   const [title, setTitle] = useState('');
   const [due, setDue] = useState(today);
+  const [edit, setEdit] = useState<RelCommitment | null>(null);
   return (
     <section className="card" aria-labelledby="cm-h">
       <div className="card__head"><h2 id="cm-h">Compromissos e acordos</h2></div>
@@ -349,7 +369,10 @@ function Commitments({ profile }: { profile: RelProfile }) {
             <li key={c.id}>
               <span className="tick-wrap"><button type="button" role="checkbox" className="tick" aria-checked={c.status === 'done'} aria-label={`${c.status === 'done' ? 'Reabrir' : 'Cumprir'}: ${c.title}`} onClick={() => dispatch({ type: 'rel/toggle', entity: 'commitments', id: c.id })}><LuCheck /></button></span>
               <div className="list__main"><div className={`list__title ${c.status === 'done' ? 'muted' : ''}`}>{c.title}</div><div className="list__meta">{c.status === 'done' ? 'Cumprido' : `Até ${formatDate(c.dueDate, { year: true })}`}{c.status !== 'done' && c.dueDate < today ? ' · atrasado' : ''}</div></div>
-              <ConfirmButton className="icon-btn" ariaLabel={`Remover ${c.title}`} confirmLabel="Remover" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'commitments', id: c.id })}><LuTrash2 /></ConfirmButton>
+              <div className="list__end">
+                <button className="icon-btn" aria-label={`Editar ${c.title}`} onClick={() => setEdit(c)}><LuPencil /></button>
+                <ConfirmButton className="icon-btn" ariaLabel={`Remover ${c.title}`} confirmLabel="Remover" onConfirm={() => dispatch({ type: 'rel/remove', entity: 'commitments', id: c.id })}><LuTrash2 /></ConfirmButton>
+              </div>
             </li>
           ))}
         </ul>
@@ -359,6 +382,7 @@ function Commitments({ profile }: { profile: RelProfile }) {
         <Field label="Prazo"><input className="input" type="date" value={due} onChange={(e) => setDue(e.target.value)} /></Field>
       </div>
       <button className="btn btn--sm btn--primary" style={{ marginTop: 10 }} onClick={async () => { if (await dispatch({ type: 'rel/upsert', entity: 'commitments', value: { profileId: profile.id, title, dueDate: due, status: 'pending' } })) setTitle(''); }}><LuPlus /> Adicionar</button>
+      <CommitmentEditForm key={edit?.id ?? 'none'} item={edit} onClose={() => setEdit(null)} />
     </section>
   );
 }
