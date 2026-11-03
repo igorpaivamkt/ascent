@@ -7,6 +7,11 @@ import type { CommandEnvelope } from '../src/domain/sync';
 import type { AppState } from '../src/domain/types';
 import { handleImport, handlePull, handleSync, handleStatus } from '../src/server/handler';
 import { MemoryDb } from '../src/server/memoryDb';
+import { toZonedISODate } from '../src/domain/dates';
+import { createEmptyState } from '../src/domain/initialState';
+
+/** "Hoje" no fuso da jornada (o motor usa o fuso das configurações, não UTC). */
+const hoje = () => toZonedISODate(new Date(), createEmptyState(new Date()).settings.timezone);
 import { NetworkError, SyncEngine, type CloudSnapshot, type CloudTransport } from '../src/services/cloud/syncEngine';
 
 const USER = '22222222-0000-4000-8000-000000000001';
@@ -52,7 +57,7 @@ describe('cliente de sincronização', () => {
     net.online = false;
     engine.enqueue(habit);
     const hid = engine.view().habits[0].id;
-    engine.enqueue({ type: 'occurrence/set', occurrenceId: `${hid}@${new Date().toISOString().slice(0, 10)}`, status: 'done' });
+    engine.enqueue({ type: 'occurrence/set', occurrenceId: `${hid}@${hoje()}`, status: 'done' });
     assert.equal(engine.pending, 2);
     assert.equal(engine.view().occurrences.length, 1, 'a lista mostra o registro na hora');
     assert.equal(xp(engine.confirmed()), 0, 'XP ainda não confirmado');
@@ -72,7 +77,7 @@ describe('cliente de sincronização', () => {
     engine.enqueue(habit);
     await engine.flush();
     const hid = engine.confirmed().habits[0].id;
-    engine.enqueue({ type: 'occurrence/set', occurrenceId: `${hid}@${new Date().toISOString().slice(0, 10)}`, status: 'done' });
+    engine.enqueue({ type: 'occurrence/set', occurrenceId: `${hid}@${hoje()}`, status: 'done' });
     net.dropNextResponse = true;
     await assert.rejects(() => engine.flush(), NetworkError);
     assert.equal(engine.pending, 1);
@@ -92,7 +97,7 @@ describe('cliente de sincronização', () => {
     await phone.engine.flush();
     await tablet.engine.refresh();
     const hid = tablet.engine.confirmed().habits[0].id;
-    const occ = `${hid}@${new Date().toISOString().slice(0, 10)}`;
+    const occ = `${hid}@${hoje()}`;
     phone.net.online = false;
     phone.engine.enqueue({ type: 'occurrence/set', occurrenceId: occ, status: 'done' });
     tablet.engine.enqueue({ type: 'occurrence/set', occurrenceId: occ, status: 'done' });
